@@ -3,16 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Auth as SupabaseAuth } from "@supabase/auth-ui-react";
 import { ThemeSupa } from "@supabase/auth-ui-shared";
 import { supabase } from "@/integrations/supabase/client";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
-import { AuthError, AuthApiError } from "@supabase/supabase-js";
-import { useAuth } from "@/components/AuthProvider";
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const { signOut } = useAuth();
 
   useEffect(() => {
     // Check if user is already authenticated
@@ -28,8 +22,6 @@ const Auth = () => {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth event:", event);
-      
       if (event === "SIGNED_IN" && session) {
         navigate("/");
       }
@@ -41,23 +33,6 @@ const Auth = () => {
 
     return () => subscription.unsubscribe();
   }, [navigate]);
-
-  const getErrorMessage = (error: AuthError) => {
-    if (error instanceof AuthApiError) {
-      switch (error.message) {
-        case "Invalid login credentials":
-          return "Invalid email or password. Please check your credentials.";
-        case "Email not confirmed":
-          return "Please verify your email address before signing in.";
-        case "Invalid refresh token":
-        case "Invalid token":
-          return "Your session has expired. Please sign in again.";
-        default:
-          return error.message;
-      }
-    }
-    return error.message;
-  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">

@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Message, MessageData, AIResponse, MessageRole } from "@/types/messages";
 import { logger } from "@/services/loggingService";
+import { PostgrestError } from "@supabase/supabase-js";
 
 export class MessageService {
   static async createMessage(messageData: MessageData): Promise<Message> {
@@ -13,7 +14,7 @@ export class MessageService {
 
     if (error) {
       logger.error('Error creating message:', error);
-      throw new Error('Failed to create message');
+      throw new Error(error.message || 'Failed to create message');
     }
 
     if (!data) {
@@ -38,14 +39,18 @@ export class MessageService {
 
     if (error) {
       logger.error('Error updating message:', error);
-      throw new Error('Failed to update message');
+      throw new Error(error.message || 'Failed to update message');
     }
 
     if (!data) {
       throw new Error('No data returned from message update');
     }
 
-    return data as Message;
+    return {
+      ...data,
+      role: data.role as MessageRole,
+      user_id: data.user_id
+    };
   }
 
   static async sendMessageToAI(messages: Message[], model: string): Promise<string> {
@@ -58,7 +63,7 @@ export class MessageService {
 
       if (response.error) {
         logger.error('AI function error:', response.error);
-        throw new Error('Failed to get AI response');
+        throw new Error(response.error.message || 'Failed to get AI response');
       }
 
       if (!response.data?.data?.content) {
@@ -70,7 +75,10 @@ export class MessageService {
       return response.data.data.content;
     } catch (error) {
       logger.error('Error in sendMessageToAI:', error);
-      throw error;
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      }
+      throw new Error('An unknown error occurred');
     }
   }
 }

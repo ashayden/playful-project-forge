@@ -8,13 +8,15 @@ import { useConversations } from "@/hooks/useConversations";
 import { useToast } from "@/hooks/use-toast";
 import { logger } from "@/services/loggingService";
 
-const ChatContext = createContext<{
+interface ChatContextType {
   state: ChatState;
   createConversation: (model: string) => Promise<any>;
   sendMessage: (content: string) => Promise<void>;
   loadConversation: (id: string) => Promise<void>;
   loadConversations: () => Promise<void>;
-} | null>(null);
+}
+
+const ChatContext = createContext<ChatContextType | null>(null);
 
 const initialState: ChatState = {
   conversations: [],
@@ -108,27 +110,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      // Create and display user message immediately
       const userMessage: Message = {
         role: 'user',
         content,
         conversation_id: state.currentConversation.id,
         user_id: user.id,
+        created_at: new Date().toISOString(),
       };
 
-      // Create placeholder for assistant message
       const assistantMessage: Message = {
         role: 'assistant',
         content: '',
         conversation_id: state.currentConversation.id,
         user_id: null,
+        created_at: new Date().toISOString(),
       };
 
-      // Add both messages to UI immediately
       dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
       dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage });
-
-      logger.debug('Sending message:', { content, conversationId: state.currentConversation.id });
 
       const [finalUserMessage, finalAssistantMessage] = await sendChatMessage(
         content,
@@ -136,9 +135,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         user.id,
         state.currentConversation.model,
         state.messages,
-        (id, content) => {
+        (id: string, content: string) => {
           if (id) {
-            logger.debug('Updating message content:', { id, contentLength: content.length });
             dispatch({
               type: 'UPDATE_MESSAGE',
               payload: { id, content }
@@ -147,7 +145,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       );
 
-      // Update messages with final versions including IDs
       if (finalUserMessage.id) {
         dispatch({ 
           type: 'UPDATE_MESSAGE', 
@@ -161,8 +158,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           payload: { id: finalAssistantMessage.id, content: finalAssistantMessage.content } 
         });
       }
-
-      logger.debug('Message sending complete');
     } catch (error) {
       logger.error('Error in sendMessage:', error);
       toast({
