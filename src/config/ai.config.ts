@@ -7,7 +7,7 @@
  * @property maxTokens - Maximum length of generated responses
  */
 export const modelConfig = {
-  modelName: 'gpt-4o-mini',
+  modelName: 'gpt-4',
   temperature: 0.7,
   maxTokens: 1000,
 } as const;
@@ -38,7 +38,7 @@ You format code blocks and technical content appropriately.`;
  * @property defaultPrompt - Default system prompt for the AI
  */
 export const aiConfig = {
-  openAIApiKey: process.env.VITE_OPENAI_API_KEY,
+  openAIApiKey: import.meta.env.VITE_OPENAI_API_KEY,
   model: modelConfig,
   defaultPrompt: defaultSystemPrompt,
 } as const; 

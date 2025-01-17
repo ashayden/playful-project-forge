@@ -12,13 +12,12 @@ export function useChatMessages() {
     content: string,
     conversationId: string,
     userId: string,
-    model: string,
     previousMessages: Message[],
     onMessageUpdate: (id: string, content: string) => void
   ): Promise<[Message, Message]> => {
     try {
       setIsLoading(true);
-      logger.debug('Starting message send process:', { conversationId, model });
+      logger.debug('Starting message send process:', { conversationId });
       
       const userMessage = await MessageService.createMessage({
         role: 'user' as MessageRole,
@@ -37,8 +36,7 @@ export function useChatMessages() {
       logger.debug('Assistant message placeholder created:', assistantMessage);
 
       const aiResponse = await MessageService.sendMessageToAI(
-        [...previousMessages, userMessage],
-        model
+        [...previousMessages, userMessage]
       );
       logger.debug('AI response received:', aiResponse);
 

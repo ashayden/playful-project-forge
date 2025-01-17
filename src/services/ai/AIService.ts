@@ -12,7 +12,7 @@ import {
   AIMessage, 
   SystemMessage 
 } from '@langchain/core/messages';
-import { modelConfig } from '@/config/ai.config';
+import { aiConfig, modelConfig } from '@/config/ai.config';
 
 /**
  * Service class for handling AI interactions using Langchain
@@ -31,11 +31,16 @@ export class AIService {
    * @param systemPrompt - Initial system prompt that sets the context and behavior of the AI
    */
   constructor(systemPrompt: string = 'You are a helpful AI assistant.') {
+    if (!aiConfig.openAIApiKey) {
+      throw new Error('OpenAI API key is not configured');
+    }
+
     // Initialize the OpenAI model with fixed configuration
     this.model = new ChatOpenAI({
       modelName: modelConfig.modelName,
       temperature: modelConfig.temperature,
       maxTokens: modelConfig.maxTokens,
+      openAIApiKey: aiConfig.openAIApiKey,
     });
 
     this.systemPrompt = systemPrompt;

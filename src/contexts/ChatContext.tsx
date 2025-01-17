@@ -143,7 +143,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         content,
         state.currentConversation.id,
         user.id,
-        state.currentConversation.model,
         state.messages,
         (id: string, content: string) => {
           if (id) {
