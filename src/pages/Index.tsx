@@ -6,6 +6,7 @@ import { ModelSelector } from "@/components/chat/ModelSelector";
 import { useEffect, useState } from "react";
 import { useChat } from "@/contexts/ChatContext";
 import { useToast } from "@/hooks/use-toast";
+import { logger } from "@/services/loggingService";
 
 const ChatInterface = () => {
   const { user, signOut } = useAuth();
@@ -15,13 +16,20 @@ const ChatInterface = () => {
 
   useEffect(() => {
     const initializeChat = async () => {
+      logger.debug('Initializing chat...', { userId: user?.id });
       try {
+        logger.debug('Loading conversations...');
         await loadConversations();
+        logger.debug('Conversations loaded:', { conversationCount: state.conversations.length });
+
         // Create initial conversation if none exists
         if (!state.currentConversation) {
-          await createConversation(model);
+          logger.debug('No current conversation, creating new one...', { model });
+          const newConversation = await createConversation(model);
+          logger.debug('Initial conversation created:', { conversationId: newConversation?.id });
         }
       } catch (error) {
+        logger.error('Failed to initialize chat:', error);
         toast({
           title: "Error",
           description: "Failed to initialize chat",
@@ -31,16 +39,22 @@ const ChatInterface = () => {
     };
 
     if (user) {
+      logger.debug('User authenticated, initializing chat...', { userId: user.id });
       initializeChat();
+    } else {
+      logger.debug('No user authenticated');
     }
   }, [user]); // Only run when user changes
 
   const handleSubmit = async (content: string) => {
+    logger.debug('Chat submit triggered:', { content, userId: user?.id });
     try {
       // Ensure there's an active conversation
       if (!state.currentConversation) {
+        logger.debug('No active conversation, creating new one...', { model });
         const conversation = await createConversation(model);
         if (!conversation) {
+          logger.error('Failed to create conversation');
           toast({
             title: "Error",
             description: "Failed to create conversation",
@@ -48,9 +62,17 @@ const ChatInterface = () => {
           });
           return;
         }
+        logger.debug('New conversation created:', { conversationId: conversation.id });
       }
+      
+      logger.debug('Sending message...', { 
+        conversationId: state.currentConversation?.id,
+        messageCount: state.messages.length 
+      });
       await sendMessage(content);
+      logger.debug('Message sent successfully');
     } catch (error) {
+      logger.error('Error in handleSubmit:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to send message",
