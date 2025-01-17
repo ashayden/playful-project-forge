@@ -1,6 +1,9 @@
+// @ts-ignore: Deno imports
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+// @ts-ignore: Deno imports
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// @ts-ignore: Deno types
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 
 interface Message {
@@ -101,19 +104,26 @@ serve(async (req) => {
       throw new Error('Invalid response format from OpenAI API');
     }
 
-    // Return the content directly as a string, which is what our MessageService expects
+    // Return the response in the format expected by the client
     return new Response(
-      JSON.stringify({ data: { content: data.choices[0].message.content } }),
+      JSON.stringify({
+        data: {
+          data: {
+            content: data.choices[0].message.content
+          }
+        }
+      }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
       }
     );
   } catch (error) {
     console.error('Error in chat function:', error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error instanceof Error ? error.message : 'An unexpected error occurred',
-        details: error instanceof Error ? error.stack : undefined,
+        details: error instanceof Error ? error.stack : undefined
       }),
       {
         status: 500,
