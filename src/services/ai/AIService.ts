@@ -4,7 +4,7 @@ import {
   MessagesPlaceholder, 
   HumanMessagePromptTemplate 
 } from '@langchain/core/prompts';
-import { RunnableSequence, RunnableConfig } from '@langchain/core/runnables';
+import { RunnableSequence } from '@langchain/core/runnables';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { 
   BaseMessage,
@@ -21,7 +21,7 @@ import { modelConfig } from '@/config/ai.config';
  */
 export class AIService {
   private model: ChatOpenAI;
-  private chain: RunnableSequence;
+  private prompt: ChatPromptTemplate;
   private systemPrompt: string;
 
   /**
@@ -39,35 +39,21 @@ export class AIService {
     });
 
     this.systemPrompt = systemPrompt;
-    this.chain = this.createConversationChain();
+    this.prompt = this.createPromptTemplate();
   }
 
   /**
-   * Creates the conversation processing chain
-   * Sets up a sequence of operations that process each message in the conversation:
-   * 1. Formats the input and history
-   * 2. Applies the system prompt and message templates
-   * 3. Sends to the AI model
-   * 4. Parses the response
+   * Creates the conversation prompt template
+   * Sets up the template that structures how messages are formatted for the AI
    * 
    * @private
-   * @returns A configured RunnableSequence for processing conversations
+   * @returns A configured ChatPromptTemplate
    */
-  private createConversationChain(): RunnableSequence {
-    const prompt = ChatPromptTemplate.fromMessages([
+  private createPromptTemplate(): ChatPromptTemplate {
+    return ChatPromptTemplate.fromMessages([
       ['system', this.systemPrompt],
       new MessagesPlaceholder('history'),
       HumanMessagePromptTemplate.fromTemplate('{input}'),
-    ]);
-
-    return RunnableSequence.from([
-      {
-        input: (input: string) => input,
-        history: (_input: string, config: RunnableConfig & { history: BaseMessage[] }) => config.history,
-      },
-      prompt,
-      this.model,
-      new StringOutputParser(),
     ]);
   }
 
@@ -106,8 +92,14 @@ export class AIService {
       const history = messages.slice(0, -1).map(this.convertToLangchainMessage);
       const currentMessage = messages[messages.length - 1].content;
 
-      // Process the conversation
-      const response = await this.chain.invoke({
+      // Create and process the conversation chain
+      const chain = RunnableSequence.from([
+        this.prompt,
+        this.model,
+        new StringOutputParser(),
+      ]);
+
+      const response = await chain.invoke({
         input: currentMessage,
         history: history,
       });
@@ -120,13 +112,13 @@ export class AIService {
   }
 
   /**
-   * Updates the system prompt and recreates the conversation chain
+   * Updates the system prompt and recreates the prompt template
    * This allows dynamic modification of the AI's behavior and context
    * 
    * @param newPrompt - New system prompt to use
    */
   updateSystemPrompt(newPrompt: string): void {
     this.systemPrompt = newPrompt;
-    this.chain = this.createConversationChain();
+    this.prompt = this.createPromptTemplate();
   }
 } 
