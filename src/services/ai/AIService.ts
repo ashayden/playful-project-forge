@@ -13,6 +13,7 @@ import {
   SystemMessage 
 } from '@langchain/core/messages';
 import { aiConfig, modelConfig } from '@/config/ai.config';
+import { logger } from '@/services/loggingService';
 
 /**
  * Service class for handling AI interactions using Langchain
@@ -31,7 +32,14 @@ export class AIService {
    * @param systemPrompt - Initial system prompt that sets the context and behavior of the AI
    */
   constructor(systemPrompt: string = 'You are a helpful AI assistant.') {
+    logger.debug('Initializing AIService with config:', { 
+      modelName: modelConfig.modelName,
+      hasApiKey: !!aiConfig.openAIApiKey,
+      systemPrompt 
+    });
+
     if (!aiConfig.openAIApiKey) {
+      logger.error('OpenAI API key is not configured');
       throw new Error('OpenAI API key is not configured');
     }
 
@@ -45,6 +53,7 @@ export class AIService {
 
     this.systemPrompt = systemPrompt;
     this.prompt = this.createPromptTemplate();
+    logger.debug('AIService initialized successfully');
   }
 
   /**
@@ -93,10 +102,16 @@ export class AIService {
    */
   async processMessage(messages: Array<{ role: string; content: string }>): Promise<string> {
     try {
+      logger.debug('Processing message with history:', { 
+        messageCount: messages.length,
+        lastMessage: messages[messages.length - 1]?.content 
+      });
+
       // Convert messages to Langchain format
       const history = messages.slice(0, -1).map(this.convertToLangchainMessage);
       const currentMessage = messages[messages.length - 1].content;
 
+      logger.debug('Creating conversation chain');
       // Create and process the conversation chain
       const chain = RunnableSequence.from([
         this.prompt,
@@ -104,15 +119,21 @@ export class AIService {
         new StringOutputParser(),
       ]);
 
+      logger.debug('Invoking chain with input:', { 
+        currentMessage,
+        historyLength: history.length 
+      });
+
       const response = await chain.invoke({
         input: currentMessage,
         history: history,
       });
 
+      logger.debug('Received response from chain:', { response });
       return response;
     } catch (error) {
-      console.error('Error processing message:', error);
-      throw new Error('Failed to process message');
+      logger.error('Error processing message:', error);
+      throw error;
     }
   }
 
@@ -123,6 +144,7 @@ export class AIService {
    * @param newPrompt - New system prompt to use
    */
   updateSystemPrompt(newPrompt: string): void {
+    logger.debug('Updating system prompt:', { newPrompt });
     this.systemPrompt = newPrompt;
     this.prompt = this.createPromptTemplate();
   }
