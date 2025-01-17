@@ -20,3 +20,8 @@ export interface MessageData {
 export interface AIResponse {
   content: string;
 }
+
+export interface FunctionsResponse<T> {
+  data: T;
+  error: Error | null;
+}

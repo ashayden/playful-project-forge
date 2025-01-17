@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
-import { Message, MessageData, AIResponse, MessageRole } from "@/types/messages";
+import { Message, MessageData, AIResponse, MessageRole, FunctionsResponse } from "@/types/messages";
 import { logger } from "@/services/loggingService";
-import { PostgrestError, FunctionsResponse } from "@supabase/supabase-js";
+import { PostgrestError } from "@supabase/supabase-js";
 
 export class MessageService {
   static async createMessage(messageData: MessageData): Promise<Message> {
@@ -13,9 +13,8 @@ export class MessageService {
       .single();
 
     if (error) {
-      const errorMessage = error.message || 'Failed to create message';
-      logger.error('Error creating message:', error);
-      throw new Error(errorMessage);
+      logger.error('Error creating message:', error as PostgrestError);
+      throw new Error(error.message);
     }
 
     if (!data) {
@@ -39,9 +38,8 @@ export class MessageService {
       .single();
 
     if (error) {
-      const errorMessage = error.message || 'Failed to update message';
-      logger.error('Error updating message:', error);
-      throw new Error(errorMessage);
+      logger.error('Error updating message:', error as PostgrestError);
+      throw new Error(error.message);
     }
 
     if (!data) {
@@ -64,9 +62,8 @@ export class MessageService {
       });
 
       if (response.error) {
-        const errorMessage = response.error.message || 'Failed to get AI response';
-        logger.error('AI function error:', errorMessage);
-        throw new Error(errorMessage);
+        logger.error('AI function error:', response.error);
+        throw new Error(response.error.message);
       }
 
       if (!response.data?.data?.content) {
@@ -78,9 +75,8 @@ export class MessageService {
       logger.debug('AI response received successfully');
       return response.data.data.content;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      logger.error('Error in sendMessageToAI:', errorMessage);
-      throw new Error(errorMessage);
+      logger.error('Error in sendMessageToAI:', error instanceof Error ? error : 'Unknown error');
+      throw error instanceof Error ? error : new Error('An unknown error occurred');
     }
   }
 }
