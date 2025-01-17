@@ -1,57 +1,47 @@
-/**
- * Service for handling application logging
- */
-export class LoggingService {
-  private static instance: LoggingService;
-  private isDebugEnabled: boolean;
+import { PostgrestError } from '@supabase/supabase-js';
 
-  private constructor() {
-    this.isDebugEnabled = import.meta.env.MODE === 'development';
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+const formatError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (error instanceof PostgrestError) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return JSON.stringify(error);
+};
+
+class Logger {
+  private log(level: LogLevel, message: string, ...args: unknown[]) {
+    const formattedArgs = args.map(arg => {
+      if (arg instanceof Error || arg instanceof PostgrestError) {
+        return formatError(arg);
+      }
+      return arg;
+    });
+    
+    console[level](message, ...formattedArgs);
   }
 
-  public static getInstance(): LoggingService {
-    if (!LoggingService.instance) {
-      LoggingService.instance = new LoggingService();
-    }
-    return LoggingService.instance;
+  debug(message: string, ...args: unknown[]) {
+    this.log('debug', message, ...args);
   }
 
-  /**
-   * Log debug information in development mode
-   */
-  public debug(...args: unknown[]): void {
-    if (this.isDebugEnabled) {
-      console.debug('[DEBUG]:', ...args);
-    }
+  info(message: string, ...args: unknown[]) {
+    this.log('info', message, ...args);
   }
 
-  /**
-   * Log informational messages
-   */
-  public info(...args: unknown[]): void {
-    console.info('[INFO]:', ...args);
+  warn(message: string, ...args: unknown[]) {
+    this.log('warn', message, ...args);
   }
 
-  /**
-   * Log warnings
-   */
-  public warn(...args: unknown[]): void {
-    console.warn('[WARN]:', ...args);
-  }
-
-  /**
-   * Log errors with stack traces in development
-   */
-  public error(error: unknown, context?: string): void {
-    if (error instanceof Error) {
-      console.error(`[ERROR${context ? ` - ${context}` : ''}]:`, {
-        message: error.message,
-        stack: this.isDebugEnabled ? error.stack : undefined,
-      });
-    } else {
-      console.error(`[ERROR${context ? ` - ${context}` : ''}]:`, error);
-    }
+  error(message: string, ...args: unknown[]) {
+    this.log('error', message, ...args);
   }
 }
 
-export const logger = LoggingService.getInstance();
+export const logger = new Logger();

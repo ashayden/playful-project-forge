@@ -26,6 +26,13 @@ const initialState: ChatState = {
   error: null,
 };
 
+const handleError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'An unexpected error occurred';
+};
+
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const { user } = useAuth();
@@ -45,10 +52,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'ADD_CONVERSATION', payload: conversation });
       return conversation;
     } catch (error) {
-      logger.error('Error in createConversation:', error);
+      const errorMessage = handleError(error);
+      logger.error('Error in createConversation:', errorMessage);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create conversation",
+        description: errorMessage,
         variant: "destructive",
       });
       throw error;
@@ -61,7 +69,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const conversations = await loadAllConversations();
       dispatch({ type: 'SET_CONVERSATIONS', payload: conversations });
     } catch (error) {
-      logger.error('Error in loadConversations:', error);
+      const errorMessage = handleError(error);
+      logger.error('Error in loadConversations:', errorMessage);
       toast({
         title: "Error",
         description: "Failed to load conversations",
@@ -86,7 +95,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_CURRENT_CONVERSATION', payload: conversation });
       dispatch({ type: 'SET_MESSAGES', payload: typedMessages });
     } catch (error) {
-      logger.error('Error in loadConversation:', error);
+      const errorMessage = handleError(error);
+      logger.error('Error in loadConversation:', errorMessage);
       toast({
         title: "Error",
         description: "Failed to load conversation",
@@ -159,10 +169,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         });
       }
     } catch (error) {
-      logger.error('Error in sendMessage:', error);
+      const errorMessage = handleError(error);
+      logger.error('Error in sendMessage:', errorMessage);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to send message",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
