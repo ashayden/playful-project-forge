@@ -139,37 +139,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      
-      const userMessage: Message = {
-        role: 'user',
-        content,
-        conversation_id: state.currentConversation.id,
-        user_id: user.id,
-        created_at: new Date().toISOString(),
-      };
-
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: '',
-        conversation_id: state.currentConversation.id,
-        user_id: null,
-        created_at: new Date().toISOString(),
-      };
-
-      logger.debug('Adding messages to state...', { 
-        userMessageId: userMessage.id,
-        conversationId: state.currentConversation.id
-      });
-
-      dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
-      dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage });
 
       logger.debug('Sending message to AI service...', {
         conversationId: state.currentConversation.id,
         messageCount: state.messages.length
       });
 
-      const [finalUserMessage, finalAssistantMessage] = await sendChatMessage(
+      // Send message and get back real messages with Supabase IDs
+      const [userMessage, assistantMessage] = await sendChatMessage(
         content,
         state.currentConversation.id,
         user.id,
@@ -185,24 +162,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       );
 
-      logger.debug('Message exchange completed', {
-        userMessageId: finalUserMessage.id,
-        assistantMessageId: finalAssistantMessage.id
-      });
-
-      if (finalUserMessage.id) {
-        dispatch({ 
-          type: 'UPDATE_MESSAGE', 
-          payload: { id: finalUserMessage.id, content: finalUserMessage.content } 
-        });
+      // Add messages to state only after we have real IDs from Supabase
+      if (userMessage.id) {
+        logger.debug('Adding user message to state...', { messageId: userMessage.id });
+        dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
       }
       
-      if (finalAssistantMessage.id) {
-        dispatch({ 
-          type: 'UPDATE_MESSAGE', 
-          payload: { id: finalAssistantMessage.id, content: finalAssistantMessage.content } 
-        });
+      if (assistantMessage.id) {
+        logger.debug('Adding assistant message to state...', { messageId: assistantMessage.id });
+        dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage });
       }
+
+      logger.debug('Message exchange completed', {
+        userMessageId: userMessage.id,
+        assistantMessageId: assistantMessage.id
+      });
     } catch (error) {
       const errorMessage = handleError(error);
       logger.error('Error in sendMessage:', { 

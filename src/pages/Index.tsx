@@ -9,6 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 import { logger } from "@/services/loggingService";
 
 const ChatInterface = () => {
+  console.log('ChatInterface mounting...');
+  logger.debug('ChatInterface initializing...');
+  
   const { user, signOut } = useAuth();
   const { state, sendMessage, createConversation, loadConversations } = useChat();
   const [model, setModel] = useState('gpt-4o-mini');
