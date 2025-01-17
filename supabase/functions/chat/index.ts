@@ -45,7 +45,7 @@ serve(async (req) => {
       throw new Error('OpenAI API key is not configured');
     }
 
-    const { messages, model = 'gpt-4o-mini' } = await req.json();
+    const { messages, model = 'gpt-4' } = await req.json();
     console.log('Processing request:', { messageCount: messages.length, model });
 
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -53,10 +53,16 @@ serve(async (req) => {
     }
 
     // Validate message format
-    const validatedMessages = messages.map((msg: Message) => ({
-      role: msg.role,
-      content: msg.content || '',
-    }));
+    const validatedMessages = messages.map((msg: Message) => {
+      if (!msg.role || !msg.content) {
+        console.error('Invalid message format:', msg);
+        throw new Error('Invalid message format: missing role or content');
+      }
+      return {
+        role: msg.role,
+        content: msg.content,
+      };
+    });
 
     console.log('Sending request to OpenAI API');
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

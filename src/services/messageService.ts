@@ -57,13 +57,13 @@ export class MessageService {
     try {
       logger.debug('Sending messages to AI:', { messageCount: messages.length, model });
       
-      const response = await supabase.functions.invoke<{ data: AIResponse }>('chat', {
+      const response = await supabase.functions.invoke<{ data: { content: string } }>('chat', {
         body: { messages, model },
       });
 
       if (response.error) {
         logger.error('AI function error:', response.error);
-        throw new Error(response.error.message);
+        throw new Error(`AI function error: ${response.error.message}`);
       }
 
       if (!response.data?.data?.content) {
@@ -75,8 +75,11 @@ export class MessageService {
       logger.debug('AI response received successfully');
       return response.data.data.content;
     } catch (error) {
-      logger.error('Error in sendMessageToAI:', error instanceof Error ? error : 'Unknown error');
-      throw error instanceof Error ? error : new Error('An unknown error occurred');
+      logger.error('Error in sendMessageToAI:', error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('An unknown error occurred while processing the AI response');
     }
   }
 }
