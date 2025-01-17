@@ -17,102 +17,104 @@ import { logger } from '@/services/loggingService';
 
 /**
  * Service class for handling AI interactions using Langchain
- * This service provides a clean interface for chat-based interactions with the AI model
- * using Langchain's conversation chain pattern.
  */
 export class AIService {
   private model: ChatOpenAI;
   private prompt: ChatPromptTemplate;
   private systemPrompt: string;
 
-  /**
-   * Creates an instance of AIService
-   * Initializes the AI model with the specified configuration and sets up the conversation chain
-   * 
-   * @param systemPrompt - Initial system prompt that sets the context and behavior of the AI
-   */
   constructor(systemPrompt: string = 'You are a helpful AI assistant.') {
+    // Log all environment variables (without their values)
+    logger.debug('Environment variables check:', { 
+      hasOpenAIKey: !!import.meta.env.VITE_OPENAI_API_KEY,
+      hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
+      hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
+    });
+
     logger.debug('Initializing AIService with config:', { 
       modelName: modelConfig.modelName,
       hasApiKey: !!aiConfig.openAIApiKey,
-      systemPrompt 
+      systemPrompt,
+      environment: import.meta.env.MODE
     });
+
+    if (!import.meta.env.VITE_OPENAI_API_KEY) {
+      const error = new Error('OpenAI API key is not set in environment variables');
+      logger.error('Environment variable error:', error);
+      throw error;
+    }
 
     if (!aiConfig.openAIApiKey) {
-      logger.error('OpenAI API key is not configured');
-      throw new Error('OpenAI API key is not configured');
+      const error = new Error('OpenAI API key is not configured in aiConfig');
+      logger.error('Configuration error:', error);
+      throw error;
     }
 
-    // Initialize the OpenAI model with fixed configuration
-    this.model = new ChatOpenAI({
-      modelName: modelConfig.modelName,
-      temperature: modelConfig.temperature,
-      maxTokens: modelConfig.maxTokens,
-      openAIApiKey: aiConfig.openAIApiKey,
-    });
+    try {
+      // Initialize the OpenAI model with fixed configuration
+      this.model = new ChatOpenAI({
+        modelName: modelConfig.modelName,
+        temperature: modelConfig.temperature,
+        maxTokens: modelConfig.maxTokens,
+        openAIApiKey: aiConfig.openAIApiKey,
+      });
 
-    this.systemPrompt = systemPrompt;
-    this.prompt = this.createPromptTemplate();
-    logger.debug('AIService initialized successfully');
+      this.systemPrompt = systemPrompt;
+      this.prompt = this.createPromptTemplate();
+      logger.debug('AIService initialized successfully');
+    } catch (error) {
+      logger.error('Error initializing AIService:', error);
+      throw new Error(`Failed to initialize AI service: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
-  /**
-   * Creates the conversation prompt template
-   * Sets up the template that structures how messages are formatted for the AI
-   * 
-   * @private
-   * @returns A configured ChatPromptTemplate
-   */
   private createPromptTemplate(): ChatPromptTemplate {
-    return ChatPromptTemplate.fromMessages([
-      ['system', this.systemPrompt],
-      new MessagesPlaceholder('history'),
-      HumanMessagePromptTemplate.fromTemplate('{input}'),
-    ]);
-  }
-
-  /**
-   * Converts a message to Langchain's BaseMessage format
-   * Handles different message roles (system, assistant, user) appropriately
-   * 
-   * @private
-   * @param message - Message object containing role and content
-   * @returns Langchain BaseMessage instance
-   */
-  private convertToLangchainMessage(message: { role: string; content: string }): BaseMessage {
-    switch (message.role) {
-      case 'system':
-        return new SystemMessage(message.content);
-      case 'assistant':
-        return new AIMessage(message.content);
-      case 'user':
-      default:
-        return new HumanMessage(message.content);
+    try {
+      return ChatPromptTemplate.fromMessages([
+        ['system', this.systemPrompt],
+        new MessagesPlaceholder('history'),
+        HumanMessagePromptTemplate.fromTemplate('{input}'),
+      ]);
+    } catch (error) {
+      logger.error('Error creating prompt template:', error);
+      throw error;
     }
   }
 
-  /**
-   * Processes a conversation and generates a response
-   * Takes an array of messages representing the conversation history and current message,
-   * processes them through the conversation chain, and returns the AI's response
-   * 
-   * @param messages - Array of messages in the conversation
-   * @returns Promise containing the AI's response as a string
-   * @throws Error if message processing fails
-   */
+  private convertToLangchainMessage(message: { role: string; content: string }): BaseMessage {
+    try {
+      switch (message.role) {
+        case 'system':
+          return new SystemMessage(message.content);
+        case 'assistant':
+          return new AIMessage(message.content);
+        case 'user':
+        default:
+          return new HumanMessage(message.content);
+      }
+    } catch (error) {
+      logger.error('Error converting message:', error);
+      throw error;
+    }
+  }
+
   async processMessage(messages: Array<{ role: string; content: string }>): Promise<string> {
     try {
+      if (!messages || messages.length === 0) {
+        throw new Error('No messages provided');
+      }
+
       logger.debug('Processing message with history:', { 
         messageCount: messages.length,
-        lastMessage: messages[messages.length - 1]?.content 
+        lastMessage: messages[messages.length - 1]?.content,
+        roles: messages.map(m => m.role)
       });
 
       // Convert messages to Langchain format
-      const history = messages.slice(0, -1).map(this.convertToLangchainMessage);
+      const history = messages.slice(0, -1).map(msg => this.convertToLangchainMessage(msg));
       const currentMessage = messages[messages.length - 1].content;
 
       logger.debug('Creating conversation chain');
-      // Create and process the conversation chain
       const chain = RunnableSequence.from([
         this.prompt,
         this.model,
@@ -121,7 +123,8 @@ export class AIService {
 
       logger.debug('Invoking chain with input:', { 
         currentMessage,
-        historyLength: history.length 
+        historyLength: history.length,
+        systemPrompt: this.systemPrompt
       });
 
       const response = await chain.invoke({
@@ -129,23 +132,30 @@ export class AIService {
         history: history,
       });
 
-      logger.debug('Received response from chain:', { response });
+      if (!response) {
+        throw new Error('No response received from AI');
+      }
+
+      logger.debug('Received response from chain:', { 
+        responseLength: response.length,
+        responsePreview: response.substring(0, 100)
+      });
+      
       return response;
     } catch (error) {
       logger.error('Error processing message:', error);
-      throw error;
+      throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  /**
-   * Updates the system prompt and recreates the prompt template
-   * This allows dynamic modification of the AI's behavior and context
-   * 
-   * @param newPrompt - New system prompt to use
-   */
   updateSystemPrompt(newPrompt: string): void {
-    logger.debug('Updating system prompt:', { newPrompt });
-    this.systemPrompt = newPrompt;
-    this.prompt = this.createPromptTemplate();
+    try {
+      logger.debug('Updating system prompt:', { newPrompt });
+      this.systemPrompt = newPrompt;
+      this.prompt = this.createPromptTemplate();
+    } catch (error) {
+      logger.error('Error updating system prompt:', error);
+      throw error;
+    }
   }
 } 
