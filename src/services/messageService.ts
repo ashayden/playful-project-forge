@@ -57,7 +57,7 @@ export class MessageService {
     try {
       logger.debug('Sending messages to AI:', { messageCount: messages.length, model });
       
-      const response = await supabase.functions.invoke<{ data: { content: string } }>('chat', {
+      const response = await supabase.functions.invoke<{ data: { data: { content: string } } }>('chat', {
         body: { messages, model },
       });
 
@@ -66,14 +66,14 @@ export class MessageService {
         throw new Error(`AI function error: ${response.error.message}`);
       }
 
-      if (!response.data?.data?.content) {
+      if (!response.data?.data?.data?.content) {
         const errorMessage = 'Invalid response format from AI';
         logger.error(errorMessage, response);
         throw new Error(errorMessage);
       }
 
       logger.debug('AI response received successfully');
-      return response.data.data.content;
+      return response.data.data.data.content;
     } catch (error) {
       logger.error('Error in sendMessageToAI:', error);
       if (error instanceof Error) {
