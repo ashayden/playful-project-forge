@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { Message, MessageData, AIResponse, MessageRole } from "@/types/messages";
+import { Message, MessageData, MessageRole } from "@/types/messages";
 import { logger } from "@/services/loggingService";
 import { PostgrestError } from "@supabase/supabase-js";
 
