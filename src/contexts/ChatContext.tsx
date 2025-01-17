@@ -1,10 +1,11 @@
-import { createContext, useContext, useReducer, ReactNode } from "react";
+import { createContext, useContext, useReducer, ReactNode, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { chatReducer } from "@/reducers/chatReducer";
 import { ChatState } from "@/types/chat";
 import { Message, MessageRole } from "@/types/messages";
 import { useChatMessages } from "@/hooks/useChatMessages";
 import { useConversations } from "@/hooks/useConversations";
+import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 import { useToast } from "@/hooks/use-toast";
 import { logger } from "@/services/loggingService";
 
@@ -43,6 +44,29 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     loadConversations: loadAllConversations,
     loadConversation: loadSingleConversation,
   } = useConversations();
+
+  // Memoize message handlers for real-time updates
+  const handleNewMessage = useCallback((message: Message) => {
+    logger.debug('Handling new real-time message', { messageId: message.id });
+    dispatch({ type: 'ADD_MESSAGE', payload: message });
+  }, []);
+
+  const handleUpdateMessage = useCallback((message: Message) => {
+    logger.debug('Handling real-time message update', { messageId: message.id });
+    if (message.id) {
+      dispatch({
+        type: 'UPDATE_MESSAGE',
+        payload: { id: message.id, content: message.content }
+      });
+    }
+  }, []);
+
+  // Set up real-time subscription
+  useRealtimeMessages(
+    state.currentConversation?.id,
+    handleNewMessage,
+    handleUpdateMessage
+  );
 
   const createConversation = async (model: string) => {
     logger.debug('Creating new conversation...', { model, userId: user?.id });
@@ -145,38 +169,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         messageCount: state.messages.length
       });
 
-      // Send message and get back real messages with Supabase IDs
-      const [userMessage, assistantMessage] = await sendChatMessage(
+      // Send message - the real-time subscription will handle state updates
+      await sendChatMessage(
         content,
         state.currentConversation.id,
         user.id,
         state.messages,
         (id: string, content: string) => {
-          if (id) {
-            logger.debug('Updating message content...', { messageId: id, contentLength: content.length });
-            dispatch({
-              type: 'UPDATE_MESSAGE',
-              payload: { id, content }
-            });
-          }
+          logger.debug('Message content updated via callback', { messageId: id });
         }
       );
 
-      // Add messages to state only after we have real IDs from Supabase
-      if (userMessage.id) {
-        logger.debug('Adding user message to state...', { messageId: userMessage.id });
-        dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
-      }
-      
-      if (assistantMessage.id) {
-        logger.debug('Adding assistant message to state...', { messageId: assistantMessage.id });
-        dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage });
-      }
-
-      logger.debug('Message exchange completed', {
-        userMessageId: userMessage.id,
-        assistantMessageId: assistantMessage.id
-      });
+      logger.debug('Message sent successfully');
     } catch (error) {
       const errorMessage = handleError(error);
       logger.error('Error in sendMessage:', { 

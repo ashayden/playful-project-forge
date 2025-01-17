@@ -14,36 +14,37 @@ export function useChatMessages() {
     userId: string,
     previousMessages: Message[],
     onMessageUpdate: (id: string, content: string) => void
-  ): Promise<[Message, Message]> => {
+  ): Promise<void> => {
     try {
       setIsLoading(true);
       logger.debug('Starting message send process:', { conversationId });
       
-      const userMessage = await MessageService.createMessage({
+      // Create user message - real-time subscription will handle state update
+      await MessageService.createMessage({
         role: 'user' as MessageRole,
         content,
         conversation_id: conversationId,
         user_id: userId,
       });
-      logger.debug('User message created:', userMessage);
+      logger.debug('User message created');
 
+      // Create empty assistant message - real-time subscription will handle state update
       const assistantMessage = await MessageService.createMessage({
         role: 'assistant' as MessageRole,
         content: '',
         conversation_id: conversationId,
         user_id: null,
       });
-      logger.debug('Assistant message placeholder created:', assistantMessage);
+      logger.debug('Assistant message placeholder created');
 
-      const aiResponse = await MessageService.sendMessageToAI(
-        [...previousMessages, userMessage]
-      );
-      logger.debug('AI response received:', aiResponse);
+      // Get AI response
+      const aiResponse = await MessageService.sendMessageToAI(previousMessages);
+      logger.debug('AI response received');
 
+      // Update assistant message - real-time subscription will handle state update
       await MessageService.updateMessage(assistantMessage.id!, aiResponse);
       onMessageUpdate(assistantMessage.id!, aiResponse);
-
-      return [userMessage, { ...assistantMessage, content: aiResponse }];
+      
     } catch (error) {
       logger.error('Error in sendMessage:', error);
       
