@@ -2,7 +2,6 @@ import { AIService } from './AIService';
 import { aiConfig } from '@/config/ai.config';
 import { Message } from '@/types/messages';
 import { logger } from '@/services/loggingService';
-import { ChatOpenAI } from 'langchain/chat_models/openai';
 
 /**
  * Service for handling chat interactions
