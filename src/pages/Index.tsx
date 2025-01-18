@@ -12,11 +12,10 @@ import { cn } from '@/lib/utils';
 function ChatInterface() {
   const { 
     messages, 
-    isLoading, 
-    currentConversation, 
     sendMessage,
-    isStreaming,
-    streamingMessageId
+    streamingMessageId,
+    isLoading,
+    currentConversation
   } = useChat();
   const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   const { isConnected, latency } = useSupabaseStatus();
@@ -93,7 +92,6 @@ function ChatInterface() {
                     key={message.id} 
                     message={message}
                     isTyping={message.id === typingMessageId} 
-                    isStreaming={isStreaming}
                     streamingMessageId={streamingMessageId}
                   />
                 ))}

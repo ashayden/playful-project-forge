@@ -321,6 +321,8 @@ export function useMessages(conversationId: string) {
     isLoading,
     error,
     sendMessage,
-    streamingMessageId
+    streamingMessageId,
+    isStreaming: !!streamingMessageId,
+    isSending: sendMessage.isPending
   };
 } 

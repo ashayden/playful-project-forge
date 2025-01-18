@@ -8,50 +8,30 @@ import { CheckIcon, AlertCircle, Clock } from 'lucide-react';
 import type { Components } from 'react-markdown';
 import type { Element } from 'hast';
 
-/**
- * Props for the ChatMessage component
- */
 interface ChatMessageProps extends ComponentPropsWithoutRef<'div'> {
-  /** The message object containing content and metadata */
   message: Message;
-  /** Whether the message is currently being typed */
   isTyping?: boolean;
-  /** Whether the message is currently streaming from the AI */
-  isStreaming?: boolean;
   streamingMessageId?: string | null;
 }
 
-/**
- * Component that renders a chat message with support for markdown, code blocks,
- * and streaming indicators
- */
 export function ChatMessage({ 
   message, 
-  isTyping = false, 
-  isStreaming = false,
+  isTyping = false,
   streamingMessageId = null,
   className, 
   ...props 
 }: ChatMessageProps) {
-  // Determine if this is an AI assistant message
   const isAssistant = message.role === 'assistant';
-  
-  // A message is streaming if it's an assistant message and either:
-  // 1. It's the current streaming message (tracked by ID)
-  // 2. It has is_streaming=true in the database
   const isCurrentlyStreaming = !!(isAssistant && message.id && (
     message.id === streamingMessageId || 
     message.is_streaming
   ));
 
-  // Show typing indicator for streaming messages or when explicitly set
-  const showTypingIndicator = isAssistant && (isTyping || isCurrentlyStreaming);
-
   // Message status indicator
   const StatusIndicator = () => {
     if (message.severity === 'error') return <AlertCircle className="h-4 w-4 text-red-500" />;
     if (!message.id || message.id.startsWith('temp-')) return <Clock className="h-4 w-4 text-zinc-500 animate-pulse" />;
-    if (isCurrentlyStreaming) return <TypingIndicator className="h-4" />;
+    if (isCurrentlyStreaming) return <TypingIndicator isStreaming={true} className="h-4" />;
     return <CheckIcon className="h-4 w-4 text-green-500 opacity-0 group-hover:opacity-100 transition-opacity" />;
   };
 

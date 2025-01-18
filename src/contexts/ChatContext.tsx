@@ -93,7 +93,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     createConversation,
     isCreating,
     messages,
-    sendMessage: (content: string) => sendMessage({ content }),
+    sendMessage: (content: string) => sendMessage.mutate({ content }),
     isSending,
     isStreaming,
     streamingMessageId,
