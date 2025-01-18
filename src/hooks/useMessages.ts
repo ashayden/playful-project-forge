@@ -38,8 +38,9 @@ export function useMessages(conversationId: string) {
           queryClient.setQueryData<Message[]>(['messages', conversationId], (old) => {
             if (!old) return [updatedMessage];
             
-            // Check for temporary messages to replace
+            // For INSERT events, handle temporary message replacement
             if (payload.eventType === 'INSERT') {
+              // Find any temporary message to replace
               const tempIndex = old.findIndex(msg => 
                 msg.id?.startsWith('temp-') && 
                 msg.role === updatedMessage.role &&
@@ -56,17 +57,11 @@ export function useMessages(conversationId: string) {
                 });
                 return updated;
               }
-            }
-            
-            // Update existing message or add new one
-            const index = old.findIndex(msg => msg.id === updatedMessage.id);
-            if (index === -1) {
-              // Avoid duplicates by checking content and role
+              
+              // Check for duplicates before adding
               const isDuplicate = old.some(msg => 
                 !msg.id?.startsWith('temp-') && 
-                msg.role === updatedMessage.role && 
-                msg.content === updatedMessage.content &&
-                msg.conversation_id === updatedMessage.conversation_id
+                msg.id === updatedMessage.id
               );
               
               if (!isDuplicate) {
@@ -76,9 +71,23 @@ export function useMessages(conversationId: string) {
               return old;
             }
             
-            const updated = [...old];
-            updated[index] = updatedMessage;
-            return updated;
+            // For UPDATE events, update existing message
+            if (payload.eventType === 'UPDATE') {
+              const index = old.findIndex(msg => msg.id === updatedMessage.id);
+              if (index !== -1) {
+                const updated = [...old];
+                updated[index] = updatedMessage;
+                logger.debug('Updated message:', updatedMessage.id);
+                return updated;
+              }
+            }
+            
+            // For DELETE events, remove the message
+            if (payload.eventType === 'DELETE') {
+              return old.filter(msg => msg.id !== updatedMessage.id);
+            }
+            
+            return old;
           });
         }
       )
