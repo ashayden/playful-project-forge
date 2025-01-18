@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { useChat } from '@/contexts/ChatContext';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatMessage } from '@/components/chat/ChatMessage';
@@ -7,67 +6,16 @@ import { LoadingState } from '@/components/LoadingSpinner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { withAuth } from '@/components/withAuth';
 import { logger } from '@/services/loggingService';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
 
 function ChatInterface() {
-  const { toast } = useToast();
-  const [isInitializing, setIsInitializing] = useState(true);
-  const { session } = useAuth();
   const {
     messages = [],
     isLoading,
     error,
     sendMessage,
     isSending,
-    conversations = [],
-    createConversation,
     currentConversation,
-    setCurrentConversation
   } = useChat();
-
-  useEffect(() => {
-    let mounted = true;
-
-    const initializeConversation = async () => {
-      // Only proceed if we have a valid session
-      if (!session) {
-        logger.debug('Waiting for session to be available');
-        return;
-      }
-
-      try {
-        if (!currentConversation) {
-          if (conversations.length === 0) {
-            logger.debug('No conversation found, creating new one');
-            await createConversation('New Chat');
-          } else {
-            logger.debug('Setting current conversation to latest:', conversations[0]);
-            setCurrentConversation(conversations[0]);
-          }
-        }
-      } catch (err) {
-        logger.error('Failed to initialize conversation:', err);
-        if (mounted) {
-          toast({
-            title: "Error",
-            description: "Failed to create conversation. Please try again.",
-            variant: "destructive",
-          });
-        }
-      } finally {
-        if (mounted) {
-          setIsInitializing(false);
-        }
-      }
-    };
-
-    initializeConversation();
-
-    return () => {
-      mounted = false;
-    };
-  }, [session, currentConversation, conversations, createConversation, setCurrentConversation, toast]);
 
   if (error) {
     logger.error('Chat interface error:', error);
@@ -83,7 +31,7 @@ function ChatInterface() {
     );
   }
 
-  if (isLoading || isInitializing) {
+  if (isLoading) {
     return <LoadingState message="Loading chat..." />;
   }
 
