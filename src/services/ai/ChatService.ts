@@ -40,11 +40,28 @@ export class ChatService {
     try {
       logger.debug('Processing streaming chat message:', { messageCount: messages.length });
 
-      // Format messages for the AI service
-      const formattedMessages = messages.map(msg => ({
-        role: msg.role,
-        content: msg.content ?? ''
-      }));
+      // Validate messages array
+      if (!Array.isArray(messages)) {
+        throw new Error('Messages must be an array');
+      }
+
+      // Ensure we have at least one message
+      if (messages.length === 0) {
+        throw new Error('No messages provided');
+      }
+
+      // Format messages for the AI service, filtering out any invalid messages
+      const formattedMessages = messages
+        .filter(msg => msg && msg.role && typeof msg.content === 'string')
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content ?? ''
+        }));
+
+      // Ensure we have valid messages after filtering
+      if (formattedMessages.length === 0) {
+        throw new Error('No valid messages to process');
+      }
 
       // Get streaming response from AI service
       await this.aiService.processMessageStream(formattedMessages, {

@@ -249,7 +249,6 @@ export function useMessages(conversationId: string) {
                   .update({ 
                     content: finalContent,
                     is_streaming: false,
-                    severity: 'success' as MessageSeverity,
                     updated_at: new Date().toISOString()
                   })
                   .eq('id', streamingMessage.id);
@@ -275,7 +274,6 @@ export function useMessages(conversationId: string) {
                   .update({ 
                     content: 'An error occurred while generating the response. Please try again.',
                     is_streaming: false,
-                    severity: 'error' as MessageSeverity,
                     updated_at: new Date().toISOString()
                   })
                   .eq('id', streamingMessage.id);
