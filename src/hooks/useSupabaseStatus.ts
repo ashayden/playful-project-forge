@@ -13,7 +13,7 @@ export function useSupabaseStatus() {
       try {
         const start = Date.now();
         // Simple ping using a lightweight query
-        const { data, error } = await supabase.from('messages').select('count', { count: 'exact', head: true });
+        const { error } = await supabase.from('messages').select('count', { count: 'exact', head: true });
         const end = Date.now();
         
         if (mounted) {

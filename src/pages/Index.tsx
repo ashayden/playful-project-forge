@@ -63,7 +63,7 @@ function ChatInterface() {
                 </div>
               </div>
               <p className="text-xs text-zinc-400">
-                This is a development environment for testing the chat interface. All messages are stored in the development database.
+                Built with React + TypeScript, using LangChain for AI processing, Supabase for real-time data and auth, and shadcn/ui for the interface.
               </p>
             </div>
           </div>
