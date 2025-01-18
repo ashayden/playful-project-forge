@@ -64,27 +64,72 @@ export function useMessages(conversationId: string) {
         throw userError;
       }
 
-      // Simulate AI response (replace with actual AI call)
-      const { data: aiMessage, error: aiError } = await supabase
-        .from('messages')
-        .insert([{
-          content: 'This is a simulated AI response.',
-          role: 'assistant',
-          conversation_id: conversationId,
-          user_id: user.id
-        }])
-        .select()
-        .single();
+      try {
+        // Call OpenAI API
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o',
+            messages: [
+              ...messages.map(msg => ({
+                role: msg.role,
+                content: msg.content
+              })),
+              { role: 'user', content }
+            ],
+            temperature: 0.7,
+            stream: false
+          })
+        });
 
-      if (aiError) {
-        logger.error('Error sending AI message:', aiError);
-        throw aiError;
+        if (!response.ok) {
+          throw new Error(`OpenAI API error: ${response.statusText}`);
+        }
+
+        const aiResponse = await response.json();
+        const aiContent = aiResponse.choices[0].message.content;
+
+        // Save AI response to database
+        const { data: aiMessage, error: aiError } = await supabase
+          .from('messages')
+          .insert([{
+            content: aiContent,
+            role: 'assistant',
+            conversation_id: conversationId,
+            user_id: user.id
+          }])
+          .select()
+          .single();
+
+        if (aiError) {
+          logger.error('Error saving AI message:', aiError);
+          throw aiError;
+        }
+
+        // Mark conversation as having a response
+        await updateConversation({ id: conversationId, hasResponse: true });
+
+        return [userMessage, aiMessage] as Message[];
+      } catch (error) {
+        logger.error('Error getting AI response:', error);
+        // Insert error message
+        const { data: errorMessage } = await supabase
+          .from('messages')
+          .insert([{
+            content: 'Sorry, I encountered an error while processing your request. Please try again.',
+            role: 'assistant',
+            conversation_id: conversationId,
+            user_id: user.id
+          }])
+          .select()
+          .single();
+
+        return [userMessage, errorMessage] as Message[];
       }
-
-      // Mark conversation as having a response
-      await updateConversation({ id: conversationId, hasResponse: true });
-
-      return [userMessage, aiMessage] as Message[];
     },
     onSuccess: (newMessages) => {
       queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {

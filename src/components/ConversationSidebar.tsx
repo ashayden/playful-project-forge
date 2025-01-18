@@ -28,6 +28,11 @@ export function ConversationSidebar() {
     isDeleting,
   } = useChat();
 
+  // Filter out conversations without responses unless they're the current conversation
+  const visibleConversations = conversations.filter(
+    conv => conv.has_response || conv.id === currentConversation?.id
+  );
+
   const handleNewChat = () => {
     createConversation('New Chat');
   };
@@ -36,7 +41,7 @@ export function ConversationSidebar() {
     event.stopPropagation();
     
     if (currentConversation?.id === conversationId) {
-      const nextConversation = conversations.find((c: Conversation) => c.id !== conversationId);
+      const nextConversation = visibleConversations.find((c: Conversation) => c.id !== conversationId);
       if (nextConversation) {
         setCurrentConversation(nextConversation);
       }
@@ -48,7 +53,7 @@ export function ConversationSidebar() {
   return (
     <SidebarProvider defaultOpen>
       <Sidebar side="left" variant="floating" collapsible="icon" className="w-72">
-        <SidebarHeader className="h-12 px-2 py-1">
+        <SidebarHeader className="h-10 min-h-[2.5rem] px-2">
           <div className="flex items-center justify-between h-full">
             <SidebarTrigger />
             <Button
@@ -56,7 +61,7 @@ export function ConversationSidebar() {
               size="icon"
               onClick={handleNewChat}
               disabled={isCreating}
-              className="h-8 w-8"
+              className="h-7 w-7"
             >
               <Plus className="h-4 w-4" />
               <span className="sr-only">New Chat</span>
@@ -64,11 +69,11 @@ export function ConversationSidebar() {
           </div>
         </SidebarHeader>
 
-        <SidebarContent>
+        <SidebarContent className="px-2">
           <SidebarGroup>
             <SidebarGroupLabel className="px-2 py-1 text-xs">Recent Conversations</SidebarGroupLabel>
-            <div className="space-y-0.5">
-              {conversations.map((conversation: Conversation) => (
+            <div className="space-y-px">
+              {visibleConversations.map((conversation: Conversation) => (
                 <ConversationItem
                   key={conversation.id}
                   conversation={conversation}
@@ -82,11 +87,11 @@ export function ConversationSidebar() {
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter className="h-12 px-2 py-1">
+        <SidebarFooter className="h-10 min-h-[2.5rem] px-2">
           <div className="flex items-center justify-between h-full">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Button variant="ghost" size="icon" className="h-7 w-7">
                   <Settings className="h-4 w-4" />
                   <span className="sr-only">Settings</span>
                 </Button>
@@ -118,7 +123,7 @@ function ConversationItem({
       isActive={isActive}
       onClick={onClick}
       tooltip={formatDistanceToNow(new Date(conversation.created_at), { addSuffix: true })}
-      className="px-2 py-1.5"
+      className="px-2 py-1"
     >
       <div className="flex items-center gap-2">
         <MessageSquare className="h-4 w-4 shrink-0" />
@@ -130,7 +135,7 @@ function ConversationItem({
         variant="ghost"
         size="icon"
         className={cn(
-          'h-6 w-6 opacity-0 group-hover:opacity-100',
+          'h-5 w-5 opacity-0 group-hover:opacity-100',
           isActive && 'opacity-100'
         )}
         onClick={onDelete}
