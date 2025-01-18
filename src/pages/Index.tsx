@@ -5,9 +5,24 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useChat } from '@/contexts/ChatContext';
 import { withAuth } from '@/components/withAuth';
 import { Badge } from '@/components/ui/badge';
+import { useState } from 'react';
+import { useSupabaseStatus } from '@/hooks/useSupabaseStatus';
+import { cn } from '@/lib/utils';
 
 function ChatInterface() {
   const { messages, isLoading, currentConversation, sendMessage } = useChat();
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
+  const { isConnected, latency } = useSupabaseStatus();
+
+  const handleSendMessage = async (content: string) => {
+    try {
+      const tempId = 'temp-' + Date.now();
+      setTypingMessageId(tempId);
+      await sendMessage(content);
+    } finally {
+      setTypingMessageId(null);
+    }
+  };
 
   return (
     <ErrorBoundary>
@@ -28,11 +43,22 @@ function ChatInterface() {
                   </Badge>
                 </div>
                 <div className="flex items-center space-x-2">
+                  <Badge 
+                    variant="outline" 
+                    className={cn(
+                      "border-zinc-700",
+                      isConnected 
+                        ? "bg-green-500/10 text-green-500 border-green-500/20" 
+                        : "bg-red-500/10 text-red-500 border-red-500/20"
+                    )}
+                  >
+                    {isConnected ? 'Connected' : 'Disconnected'}
+                  </Badge>
                   <Badge variant="outline" className="bg-zinc-900/50 text-zinc-400 border-zinc-700">
                     Messages: {messages.length}
                   </Badge>
                   <Badge variant="outline" className="bg-zinc-900/50 text-zinc-400 border-zinc-700">
-                    Latency: 0ms
+                    Latency: {latency}ms
                   </Badge>
                 </div>
               </div>
@@ -56,7 +82,11 @@ function ChatInterface() {
             ) : (
               <div className="pb-[200px] pt-4 space-y-6">
                 {messages.map((message) => (
-                  <ChatMessage key={message.id} message={message} />
+                  <ChatMessage 
+                    key={message.id} 
+                    message={message}
+                    isTyping={message.id === typingMessageId} 
+                  />
                 ))}
               </div>
             )}
@@ -66,8 +96,8 @@ function ChatInterface() {
         <footer className="fixed bottom-0 left-0 right-0 border-t border-zinc-800 bg-[#1E1E1E]/90 backdrop-blur supports-[backdrop-filter]:bg-[#1E1E1E]/50">
           <div className="mx-auto max-w-3xl p-4">
             <ChatInput
-              onSend={sendMessage}
-              disabled={isLoading || !currentConversation}
+              onSend={handleSendMessage}
+              disabled={isLoading || !currentConversation || !isConnected}
             />
           </div>
         </footer>
