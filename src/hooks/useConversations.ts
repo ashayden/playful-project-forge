@@ -40,7 +40,7 @@ export function useConversations() {
         .insert([{ 
           title,
           user_id: user.id,
-          model: 'gpt-4-turbo-preview' // default model
+          model: 'gpt-4o-mini' // updated model
         }])
         .select()
         .single();
