@@ -1,5 +1,5 @@
 import { Plus, MessageSquare, Settings, Trash2 } from 'lucide-react';
-import { useChat } from '@/hooks/useChat';
+import { useChat } from '../hooks/useChat';
 import { cn } from '@/lib/utils';
 import { Conversation } from '@/types/chat';
 import {
@@ -9,7 +9,6 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarHeader,
-  SidebarInput,
   SidebarMenuButton,
   SidebarProvider,
   SidebarTrigger,
@@ -36,7 +35,6 @@ export function ConversationSidebar() {
   const handleDeleteConversation = async (conversationId: string, event: React.MouseEvent) => {
     event.stopPropagation();
     
-    // If we're deleting the current conversation, switch to another one first
     if (currentConversation?.id === conversationId) {
       const nextConversation = conversations.find((c: Conversation) => c.id !== conversationId);
       if (nextConversation) {
@@ -49,44 +47,46 @@ export function ConversationSidebar() {
 
   return (
     <SidebarProvider defaultOpen>
-      <Sidebar side="left" variant="floating" collapsible="icon">
-        <SidebarHeader>
-          <div className="flex items-center justify-between">
+      <Sidebar side="left" variant="floating" collapsible="icon" className="w-72">
+        <SidebarHeader className="h-12 px-2 py-1">
+          <div className="flex items-center justify-between h-full">
             <SidebarTrigger />
             <Button
               variant="ghost"
               size="icon"
               onClick={handleNewChat}
               disabled={isCreating}
+              className="h-8 w-8"
             >
               <Plus className="h-4 w-4" />
               <span className="sr-only">New Chat</span>
             </Button>
           </div>
-          <SidebarInput placeholder="Search conversations..." />
         </SidebarHeader>
 
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>Recent Conversations</SidebarGroupLabel>
-            {conversations.map((conversation: Conversation) => (
-              <ConversationItem
-                key={conversation.id}
-                conversation={conversation}
-                isActive={currentConversation?.id === conversation.id}
-                onClick={() => setCurrentConversation(conversation)}
-                onDelete={(event) => handleDeleteConversation(conversation.id, event)}
-                isDeleting={isDeleting}
-              />
-            ))}
+            <SidebarGroupLabel className="px-2 py-1 text-xs">Recent Conversations</SidebarGroupLabel>
+            <div className="space-y-0.5">
+              {conversations.map((conversation: Conversation) => (
+                <ConversationItem
+                  key={conversation.id}
+                  conversation={conversation}
+                  isActive={currentConversation?.id === conversation.id}
+                  onClick={() => setCurrentConversation(conversation)}
+                  onDelete={(event) => handleDeleteConversation(conversation.id, event)}
+                  isDeleting={isDeleting}
+                />
+              ))}
+            </div>
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter>
-          <div className="flex items-center justify-between px-2">
+        <SidebarFooter className="h-12 px-2 py-1">
+          <div className="flex items-center justify-between h-full">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" className="h-8 w-8">
                   <Settings className="h-4 w-4" />
                   <span className="sr-only">Settings</span>
                 </Button>
@@ -118,10 +118,11 @@ function ConversationItem({
       isActive={isActive}
       onClick={onClick}
       tooltip={formatDistanceToNow(new Date(conversation.created_at), { addSuffix: true })}
+      className="px-2 py-1.5"
     >
       <div className="flex items-center gap-2">
-        <MessageSquare className="h-4 w-4" />
-        <span className="flex-1 truncate">
+        <MessageSquare className="h-4 w-4 shrink-0" />
+        <span className="flex-1 truncate text-sm">
           {conversation.title || 'New Chat'}
         </span>
       </div>
@@ -129,7 +130,7 @@ function ConversationItem({
         variant="ghost"
         size="icon"
         className={cn(
-          'h-4 w-4 opacity-0 group-hover:opacity-100',
+          'h-6 w-6 opacity-0 group-hover:opacity-100',
           isActive && 'opacity-100'
         )}
         onClick={onDelete}

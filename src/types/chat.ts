@@ -2,13 +2,12 @@
  * Represents a chat message in the system
  */
 export interface Message {
-  id?: string;
-  role: 'user' | 'assistant' | 'system';
+  id: string;
+  created_at: string;
   content: string;
+  role: 'user' | 'assistant' | 'system';
   conversation_id: string;
-  user_id: string | null;
-  created_at?: string;
-  reactions?: MessageReaction[];
+  user_id: string;
 }
 
 /**
@@ -27,11 +26,11 @@ export interface MessageReaction {
  */
 export interface Conversation {
   id: string;
-  title: string | null;
-  model: string;
   created_at: string;
-  updated_at: string;
+  title: string;
   user_id: string;
+  model: string;
+  has_response: boolean;
 }
 
 /**

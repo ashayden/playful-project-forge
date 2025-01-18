@@ -29,7 +29,11 @@ export function useConversations() {
         throw error;
       }
 
-      return (data || []) as Conversation[];
+      return (data || []).map(conv => ({
+        ...conv,
+        has_response: conv.has_response ?? false,
+        model: 'gpt-4o'
+      })) as Conversation[];
     },
     refetchInterval: 60000,
     refetchOnWindowFocus: true,
@@ -54,7 +58,8 @@ export function useConversations() {
         .insert([{
           title,
           user_id: user.id,
-          model: 'gpt-4-turbo-preview'
+          model: 'gpt-4o',
+          has_response: false
         }])
         .select()
         .single();
@@ -64,12 +69,59 @@ export function useConversations() {
         throw error;
       }
 
-      return data as Conversation;
+      const newConversation = {
+        ...data,
+        has_response: false,
+        model: 'gpt-4o'
+      } as Conversation;
+
+      return newConversation;
     },
     onSuccess: (newConversation) => {
       queryClient.setQueryData<Conversation[]>([CONVERSATIONS_KEY], old => {
         const conversations = [...(old || [])];
         return [newConversation, ...conversations];
+      });
+    },
+  });
+
+  const updateConversation = useMutation({
+    mutationFn: async ({ id, title, hasResponse }: { id: string; title?: string; hasResponse?: boolean }) => {
+      logger.debug('Updating conversation:', { id, title, hasResponse });
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
+
+      const updates: any = {};
+      if (title !== undefined) updates.title = title;
+      if (hasResponse !== undefined) updates.has_response = hasResponse;
+
+      const { data, error } = await supabase
+        .from('conversations')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        logger.error('Error updating conversation:', error);
+        throw error;
+      }
+
+      return {
+        ...data,
+        has_response: data.has_response ?? false,
+        model: 'gpt-4o'
+      } as Conversation;
+    },
+    onSuccess: (updatedConversation) => {
+      queryClient.setQueryData<Conversation[]>([CONVERSATIONS_KEY], old => {
+        if (!old) return old;
+        return old.map(conversation => 
+          conversation.id === updatedConversation.id ? updatedConversation : conversation
+        );
       });
     },
   });
@@ -99,9 +151,18 @@ export function useConversations() {
     conversations,
     isLoading,
     error,
-    createConversation: createConversation.mutate,
+    createConversation: async (title: string) => {
+      const result = await createConversation.mutateAsync(title);
+      return result;
+    },
     isCreating: createConversation.isPending,
-    deleteConversation: deleteConversation.mutate,
+    updateConversation: async (params: { id: string; title?: string; hasResponse?: boolean }) => {
+      await updateConversation.mutateAsync(params);
+    },
+    isUpdating: updateConversation.isPending,
+    deleteConversation: async (id: string) => {
+      await deleteConversation.mutateAsync(id);
+    },
     isDeleting: deleteConversation.isPending,
   };
 }

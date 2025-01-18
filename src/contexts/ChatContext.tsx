@@ -11,12 +11,14 @@ export type ChatContextType = {
   conversations: Conversation[];
   isLoading: boolean;
   error: Error | null;
-  createConversation: (title: string) => void;
+  createConversation: (title: string) => Promise<Conversation>;
   isCreating: boolean;
-  deleteConversation: (id: string) => void;
+  updateConversation: (params: { id: string; title?: string; hasResponse?: boolean }) => Promise<void>;
+  isUpdating: boolean;
+  deleteConversation: (id: string) => Promise<void>;
   isDeleting: boolean;
   messages: Message[];
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   isSending: boolean;
   isStreaming: boolean;
@@ -34,6 +36,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     error: conversationsError,
     createConversation,
     isCreating,
+    updateConversation,
+    isUpdating,
     deleteConversation,
     isDeleting,
   } = useConversations();
@@ -91,6 +95,43 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const isLoading = isLoadingConversations || isInitializing;
 
+  const handleSendMessage = async (content: string) => {
+    try {
+      // If no current conversation, create one with a title from the first message
+      if (!currentConversation) {
+        const title = generateTitle(content);
+        const newConversation = await createConversation(title);
+        setCurrentConversation(newConversation);
+        await sendMessage(content);
+        return;
+      }
+
+      // Send the message
+      await sendMessage(content);
+
+      // Update conversation title if it's still "New Chat" and this is the first message
+      if (currentConversation.title === 'New Chat' && messages.length === 0) {
+        const title = generateTitle(content);
+        await updateConversation({ id: currentConversation.id, title });
+      }
+
+      // Mark conversation as having a response after the assistant replies
+      if (!currentConversation.has_response && messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
+        await updateConversation({ id: currentConversation.id, hasResponse: true });
+      }
+    } catch (err) {
+      logger.error('Failed to send message:', err);
+      throw err;
+    }
+  };
+
+  const generateTitle = (content: string): string => {
+    // Extract first few words or first sentence, whichever is shorter
+    const words = content.split(' ').slice(0, 4).join(' ');
+    const firstSentence = content.split(/[.!?]/, 1)[0];
+    return (words.length < firstSentence.length ? words : firstSentence) + '...';
+  };
+
   const value = {
     currentConversation,
     conversations,
@@ -98,10 +139,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     error,
     createConversation,
     isCreating,
+    updateConversation,
+    isUpdating,
     deleteConversation,
     isDeleting,
     messages,
-    sendMessage: (content: string) => sendMessage.mutate({ content }),
+    sendMessage: handleSendMessage,
     deleteMessage,
     isSending,
     isStreaming,
