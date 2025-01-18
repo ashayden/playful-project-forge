@@ -16,65 +16,111 @@ export function useMessages(conversationId: string) {
   // Add realtime subscription
   useEffect(() => {
     let channel: RealtimeChannel;
+    let retryCount = 0;
+    const maxRetries = 3;
 
-    if (conversationId) {
-      channel = supabase
-        .channel(`messages:${conversationId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'messages',
-            filter: `conversation_id=eq.${conversationId}`
-          },
-          (payload) => {
-            logger.debug('Realtime message update:', payload);
-            
-            // Handle message updates
-            if (payload.eventType === 'UPDATE') {
-              queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
-                if (!old) return old;
-                return old.map(msg => 
-                  msg.id === payload.new.id 
-                    ? { ...msg, ...payload.new }
-                    : msg
-                );
-              });
+    async function setupChannel() {
+      try {
+        if (channel) {
+          await channel.unsubscribe();
+        }
 
-              // Update streaming state if needed
-              if (payload.new.id === streamingMessageId && payload.new.is_streaming === false) {
-                setStreamingMessageId(null);
+        channel = supabase
+          .channel(`messages:${conversationId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'messages',
+              filter: `conversation_id=eq.${conversationId}`
+            },
+            (payload) => {
+              logger.debug('Realtime message update:', payload);
+              
+              // Handle message updates
+              if (payload.eventType === 'UPDATE') {
+                queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
+                  if (!old) return old;
+                  const updated = old.map(msg => 
+                    msg.id === payload.new.id 
+                      ? { ...msg, ...payload.new }
+                      : msg
+                  );
+                  logger.debug('Updated messages in cache:', {
+                    oldCount: old.length,
+                    newCount: updated.length,
+                    updatedId: payload.new.id
+                  });
+                  return updated;
+                });
+
+                // Update streaming state if needed
+                if (payload.new.id === streamingMessageId) {
+                  if (payload.new.is_streaming === false) {
+                    logger.debug('Clearing streaming state for message:', streamingMessageId);
+                    setStreamingMessageId(null);
+                  }
+                }
+              }
+              
+              // Handle new messages
+              if (payload.eventType === 'INSERT') {
+                queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
+                  if (!old) return [payload.new as Message];
+                  
+                  // Find any temporary message to replace
+                  const tempIndex = old.findIndex(msg => 
+                    msg.id?.startsWith('temp-') && 
+                    msg.role === payload.new.role &&
+                    msg.content === payload.new.content
+                  );
+                  
+                  if (tempIndex >= 0) {
+                    // Replace temporary message
+                    const newMessages = [...old];
+                    newMessages[tempIndex] = payload.new as Message;
+                    logger.debug('Replaced temp message:', {
+                      tempId: old[tempIndex].id,
+                      newId: payload.new.id
+                    });
+                    return newMessages;
+                  } else {
+                    // Add new message
+                    logger.debug('Added new message:', payload.new.id);
+                    return [...old, payload.new as Message];
+                  }
+                });
               }
             }
+          )
+          .subscribe(async (status) => {
+            logger.debug('Realtime subscription status:', status);
             
-            // Handle new messages
-            if (payload.eventType === 'INSERT') {
-              queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
-                if (!old) return [payload.new as Message];
-                // Find any temporary message to replace
-                const tempIndex = old.findIndex(msg => 
-                  msg.id?.startsWith('temp-') && 
-                  msg.role === payload.new.role &&
-                  msg.content === payload.new.content
-                );
-                
-                if (tempIndex >= 0) {
-                  // Replace temporary message
-                  const newMessages = [...old];
-                  newMessages[tempIndex] = payload.new as Message;
-                  return newMessages;
-                } else {
-                  // Add new message
-                  return [...old, payload.new as Message];
-                }
-              });
+            if (status === 'SUBSCRIBED') {
+              retryCount = 0;
+            } else if (status === 'CHANNEL_ERROR' && retryCount < maxRetries) {
+              retryCount++;
+              logger.warn(`Retrying subscription (attempt ${retryCount}/${maxRetries})`);
+              await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+              await setupChannel();
+            } else if (status === 'CHANNEL_ERROR') {
+              logger.error('Failed to establish realtime connection after retries');
             }
-          }
-        )
-        .subscribe((status) => {
-          logger.debug('Realtime subscription status:', status);
-        });
+          });
+      } catch (error) {
+        logger.error('Error setting up realtime subscription:', error);
+        if (retryCount < maxRetries) {
+          retryCount++;
+          logger.warn(`Retrying subscription (attempt ${retryCount}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          await setupChannel();
+        }
+      }
+    }
+
+    if (conversationId) {
+      setupChannel();
     }
 
     return () => {
@@ -191,6 +237,8 @@ export function useMessages(conversationId: string) {
             return old ? [...old, optimisticAiMessage] : [optimisticAiMessage];
           });
 
+          let isStreaming = true;
+
           try {
             // Create a placeholder assistant message
             const { data: assistantMessage, error: assistantError } = await supabase
@@ -225,80 +273,102 @@ export function useMessages(conversationId: string) {
             // Process the message with streaming
             await chatService.processMessageStream([...validMessages, userMessage], {
               onToken: async (token: string) => {
+                if (!isStreaming) return; // Skip if we're no longer streaming
                 pendingContent += token;
                 
                 // Batch updates to reduce database writes
                 if (!batchTimeout) {
                   batchTimeout = setTimeout(async () => {
-                    if (pendingContent) {
-                      streamedContent += pendingContent;
-                      
-                      // Update the message content in the database
-                      const { error: updateError } = await supabase
-                        .from('messages')
-                        .update({ 
-                          content: streamedContent,
-                          is_streaming: true,
-                          updated_at: new Date().toISOString()
-                        })
-                        .eq('id', streamingMessage.id);
+                    if (pendingContent && isStreaming) {
+                      try {
+                        streamedContent += pendingContent;
+                        
+                        // Update the message content in the database
+                        const { error: updateError } = await supabase
+                          .from('messages')
+                          .update({ 
+                            content: streamedContent,
+                            is_streaming: true,
+                            updated_at: new Date().toISOString()
+                          })
+                          .eq('id', streamingMessage.id);
 
-                      if (updateError) {
-                        throw updateError;
+                        if (updateError) {
+                          logger.error('Error updating streaming message:', updateError);
+                          isStreaming = false;
+                          throw updateError;
+                        }
+
+                        pendingContent = '';
+                      } catch (error) {
+                        logger.error('Error in batch update:', error);
+                        isStreaming = false;
+                        throw error;
                       }
-
-                      pendingContent = '';
                     }
                     batchTimeout = null;
                   }, 100);
                 }
               },
               onComplete: async () => {
-                // Clear any pending timeout
-                if (batchTimeout) {
-                  clearTimeout(batchTimeout);
-                  batchTimeout = null;
+                try {
+                  // Clear any pending timeout
+                  if (batchTimeout) {
+                    clearTimeout(batchTimeout);
+                    batchTimeout = null;
+                  }
+
+                  isStreaming = false;
+
+                  // Final update with complete content
+                  const finalContent = streamedContent + pendingContent;
+                  const { error: finalUpdateError } = await supabase
+                    .from('messages')
+                    .update({ 
+                      content: finalContent,
+                      is_streaming: false,
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('id', streamingMessage.id);
+
+                  if (finalUpdateError) {
+                    logger.error('Error in final update:', finalUpdateError);
+                    throw finalUpdateError;
+                  }
+
+                  // Clear streaming state
+                  setStreamingMessageId(null);
+                } catch (error) {
+                  logger.error('Error in onComplete:', error);
+                  throw error;
                 }
-
-                // Final update with complete content
-                const finalContent = streamedContent + pendingContent;
-                const { error: finalUpdateError } = await supabase
-                  .from('messages')
-                  .update({ 
-                    content: finalContent,
-                    is_streaming: false,
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('id', streamingMessage.id);
-
-                if (finalUpdateError) {
-                  throw finalUpdateError;
-                }
-
-                // Clear streaming state
-                setStreamingMessageId(null);
               },
               onError: async (error) => {
                 // Clear streaming state and timeout
+                isStreaming = false;
                 setStreamingMessageId(null);
                 if (batchTimeout) {
                   clearTimeout(batchTimeout);
                   batchTimeout = null;
                 }
 
-                // Update message with error
-                const { error: updateError } = await supabase
-                  .from('messages')
-                  .update({ 
-                    content: 'An error occurred while generating the response. Please try again.',
-                    is_streaming: false,
-                    updated_at: new Date().toISOString(),
-                    severity: 'error'
-                  })
-                  .eq('id', streamingMessage.id);
+                try {
+                  // Update message with error
+                  const { error: updateError } = await supabase
+                    .from('messages')
+                    .update({ 
+                      content: 'An error occurred while generating the response. Please try again.',
+                      is_streaming: false,
+                      updated_at: new Date().toISOString(),
+                      severity: 'error'
+                    })
+                    .eq('id', streamingMessage.id);
 
-                if (updateError) {
-                  logger.error('Error updating message with error state:', updateError);
+                  if (updateError) {
+                    logger.error('Error updating message with error state:', updateError);
+                  }
+                } catch (updateError) {
+                  logger.error('Error in error handling:', updateError);
                 }
 
                 throw error;
@@ -311,6 +381,7 @@ export function useMessages(conversationId: string) {
             };
           } catch (error) {
             // Clear streaming state
+            isStreaming = false;
             setStreamingMessageId(null);
             logger.error('Error processing message with AI:', error);
             throw error;
