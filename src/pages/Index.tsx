@@ -20,18 +20,19 @@ const ChatInterface = () => {
     messages,
     sendMessage,
     isSending,
+    setCurrentConversation,
+    conversations,
   } = useChat();
   const { toast } = useToast();
 
   useEffect(() => {
-    const initializeChat = async () => {
+    const initializeChat = () => {
       logger.debug('Initializing chat...', { userId: user?.id });
       try {
         // Create initial conversation if none exists
         if (!state.currentConversation && !isLoading) {
           logger.debug('No current conversation, creating new one...');
           createConversation('New Chat');
-          logger.debug('Initial conversation created');
         }
       } catch (error) {
         logger.error('Failed to initialize chat:', error);
@@ -49,7 +50,15 @@ const ChatInterface = () => {
     } else {
       logger.debug('No user authenticated');
     }
-  }, [user, state.currentConversation, isLoading]);
+  }, [user, state.currentConversation, isLoading, createConversation]);
+
+  // Set current conversation when a new one is created
+  useEffect(() => {
+    if (conversations.length > 0 && !state.currentConversation) {
+      logger.debug('Setting current conversation to latest:', conversations[0]);
+      setCurrentConversation(conversations[0]);
+    }
+  }, [conversations, state.currentConversation, setCurrentConversation]);
 
   if (error) {
     toast({
