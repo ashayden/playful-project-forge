@@ -34,12 +34,17 @@ export function ChatMessage({
 }: ChatMessageProps) {
   // Determine if this is an AI assistant message
   const isAssistant = message.role === 'assistant';
-  const isCurrentlyStreaming = isAssistant && (
-    (isStreaming && streamingMessageId === message.id) || 
+  
+  // A message is streaming if it's an assistant message and either:
+  // 1. It's the current streaming message (tracked by ID)
+  // 2. It has is_streaming=true in the database
+  const isCurrentlyStreaming = !!(isAssistant && message.id && (
+    message.id === streamingMessageId || 
     message.is_streaming
-  );
-  // Show typing indicator for AI messages that are typing or streaming
-  const showTyping = isAssistant && (isTyping || isCurrentlyStreaming);
+  ));
+
+  // Show typing indicator for streaming messages or when explicitly set
+  const showTypingIndicator = isAssistant && (isTyping || isCurrentlyStreaming);
 
   // Markdown components configuration
   const markdownComponents: Components = {
@@ -62,7 +67,7 @@ export function ChatMessage({
           <code 
             className={cn(
               "rounded-md bg-zinc-800 px-1.5 py-0.5 text-sm font-medium text-zinc-200",
-              className
+              className || undefined
             )}
           >
             {children}
@@ -71,7 +76,7 @@ export function ChatMessage({
       }
 
       return (
-        <code className={cn(className, lang && `language-${lang}`)}>
+        <code className={cn(className || undefined, lang && `language-${lang}`)}>
           {children}
         </code>
       );
@@ -80,7 +85,7 @@ export function ChatMessage({
       return (
         <p className={cn(
           "mb-4 last:mb-0 text-zinc-200",
-          isStreaming && "animate-pulse"
+          isCurrentlyStreaming && "animate-pulse"
         )}>
           {children}
         </p>
@@ -108,7 +113,7 @@ export function ChatMessage({
       <div className={cn(
         "flex-1 space-y-4",
         "transition-all duration-300",
-        showTyping && "opacity-80"
+        showTypingIndicator && "opacity-80"
       )}>
         <div className="min-h-[20px] text-base text-zinc-100">
           <div className={cn(
@@ -127,7 +132,7 @@ export function ChatMessage({
       </div>
 
       {/* Typing Indicator */}
-      {showTyping && (
+      {showTypingIndicator && (
         <div className={cn(
           "absolute bottom-2 left-4",
           "transition-all duration-300",
