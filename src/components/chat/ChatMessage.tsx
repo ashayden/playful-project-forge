@@ -18,30 +18,30 @@ export function ChatMessage({ message, className, ...props }: ChatMessageProps) 
   return (
     <div
       className={cn(
-        'group relative flex gap-3 py-3',
-        isAssistant && 'bg-zinc-800/40',
+        'group relative flex gap-4 px-4 py-6',
+        isAssistant && 'bg-zinc-900/50',
         className
       )}
       {...props}
     >
-      <div className="flex-1 space-y-2 overflow-hidden px-1">
-        <div className="min-h-[20px] text-sm">
-          <div className="prose prose-invert max-w-none">
+      <div className="flex-1 space-y-4">
+        <div className="min-h-[20px] text-base text-zinc-100">
+          <div className="prose prose-invert max-w-none prose-p:leading-7 prose-pre:my-4">
             <ReactMarkdown
               rehypePlugins={[rehypeRaw]}
               components={{
                 pre: ({ node, ...props }) => (
-                  <div className="relative my-2">
-                    <pre className="overflow-x-auto rounded-lg bg-zinc-800 p-4" {...props} />
+                  <div className="relative my-4">
+                    <pre className="overflow-x-auto rounded-lg bg-zinc-900 p-4 text-sm" {...props} />
                   </div>
                 ),
                 code: ({ inline, ...props }: CodeProps) =>
                   inline ? (
-                    <code className="rounded-md bg-zinc-800 px-1.5 py-0.5 text-sm" {...props} />
+                    <code className="rounded-md bg-zinc-800 px-1.5 py-0.5 text-sm font-medium text-zinc-200" {...props} />
                   ) : (
                     <code {...props} />
                   ),
-                p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
+                p: ({ children }) => <p className="mb-4 last:mb-0 text-zinc-200">{children}</p>,
               }}
             >
               {message.content}
