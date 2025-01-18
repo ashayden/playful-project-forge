@@ -6,6 +6,7 @@ import { logger } from "@/services/loggingService";
 
 export function useChatMessages() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const { toast } = useToast();
 
   const sendMessage = async (
@@ -37,16 +38,28 @@ export function useChatMessages() {
       });
       logger.debug('Assistant message placeholder created');
 
-      // Get AI response
-      const aiResponse = await MessageService.sendMessageToAI(previousMessages);
-      logger.debug('AI response received');
+      let streamedContent = '';
+      setIsStreaming(true);
 
-      // Update assistant message - real-time subscription will handle state update
-      await MessageService.updateMessage(assistantMessage.id!, aiResponse);
-      onMessageUpdate(assistantMessage.id!, aiResponse);
+      // Get AI response with streaming
+      await MessageService.sendMessageToAI(
+        previousMessages,
+        async (token) => {
+          streamedContent += token;
+          onMessageUpdate(assistantMessage.id!, streamedContent);
+        },
+        async () => {
+          // Final update to ensure consistency
+          await MessageService.updateMessage(assistantMessage.id!, streamedContent);
+          setIsStreaming(false);
+        }
+      );
+      
+      logger.debug('AI streaming completed');
       
     } catch (error) {
       logger.error('Error in sendMessage:', error);
+      setIsStreaming(false);
       
       toast({
         title: "Error",
@@ -62,6 +75,7 @@ export function useChatMessages() {
 
   return {
     sendMessage,
-    isLoading
+    isLoading,
+    isStreaming
   };
 }

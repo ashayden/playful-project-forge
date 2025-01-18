@@ -57,7 +57,11 @@ export class MessageService {
     };
   }
 
-  static async sendMessageToAI(messages: Message[]): Promise<string> {
+  static async sendMessageToAI(
+    messages: Message[],
+    onUpdate: (content: string) => void,
+    onComplete?: () => void
+  ): Promise<void> {
     try {
       logger.debug('Sending messages to AI:', { messageCount: messages.length });
       
@@ -67,11 +71,21 @@ export class MessageService {
         content: msg.content
       }));
 
-      // Process the messages using AIService
-      const response = await this.aiService.processMessage(formattedMessages);
+      // Process the messages using AIService with streaming
+      await this.aiService.processMessageStream(formattedMessages, {
+        onToken: (token: string) => {
+          onUpdate(token);
+        },
+        onComplete: () => {
+          onComplete?.();
+        },
+        onError: (error: Error) => {
+          logger.error('Error in AI stream:', error);
+          throw error;
+        }
+      });
 
-      logger.debug('AI response received successfully');
-      return response;
+      logger.debug('AI streaming completed successfully');
     } catch (error) {
       logger.error('Error in sendMessageToAI:', error);
       if (error instanceof Error) {

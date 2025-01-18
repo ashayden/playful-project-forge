@@ -1,6 +1,6 @@
 import { AIService } from './AIService';
 import { aiConfig } from '@/config/ai.config';
-import { Message } from '@/types/messages';
+import { Message } from '@/types/chat';
 import { logger } from '@/services/loggingService';
 
 /**
@@ -20,32 +20,41 @@ export class ChatService {
   }
 
   /**
-   * Processes a chat message and generates a response
+   * Processes a chat message and generates a streaming response
    * Takes the conversation history and current message, formats them appropriately,
    * sends them to the AI service, and handles any errors that occur
    * 
    * @param messages - Array of messages in the conversation
-   * @returns Promise containing the AI's response
+   * @param callbacks - Callbacks for handling streaming response
+   * @returns Promise that resolves when streaming is complete
    * @throws Error if message processing fails
    */
-  async processMessage(messages: Message[]): Promise<string> {
+  async processMessageStream(
+    messages: Message[],
+    callbacks: {
+      onToken: (token: string) => void;
+      onComplete?: () => void;
+      onError?: (error: Error) => void;
+    }
+  ): Promise<void> {
     try {
-      logger.debug('Processing chat message:', { messageCount: messages.length });
+      logger.debug('Processing streaming chat message:', { messageCount: messages.length });
 
       // Format messages for the AI service
       const formattedMessages = messages.map(msg => ({
         role: msg.role,
-        content: msg.content
+        content: msg.content ?? ''
       }));
 
-      // Get response from AI service
-      const response = await this.aiService.processMessage(formattedMessages);
-      logger.debug('AI response received');
-
-      return response;
+      // Get streaming response from AI service
+      await this.aiService.processMessageStream(formattedMessages, {
+        onToken: callbacks.onToken,
+        onComplete: callbacks.onComplete,
+        onError: callbacks.onError,
+      });
     } catch (error) {
       logger.error('Error in chat service:', error);
-      throw error;
+      callbacks.onError?.(error instanceof Error ? error : new Error('Unknown error in chat service'));
     }
   }
 

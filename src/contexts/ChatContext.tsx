@@ -15,6 +15,8 @@ type ChatContextType = {
   messages: Message[];
   sendMessage: (content: string) => void;
   isSending: boolean;
+  isStreaming: boolean;
+  streamingMessageId: string | null;
   setCurrentConversation: (conversation: Conversation) => void;
 };
 
@@ -76,6 +78,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     messages = [],
     sendMessage,
     isSending,
+    isStreaming,
+    streamingMessageId,
   } = useMessages(currentConversation?.id ?? '');
 
   const isLoading = isLoadingConversations || isInitializing;
@@ -90,6 +94,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     messages,
     sendMessage: (content: string) => sendMessage({ content }),
     isSending,
+    isStreaming,
+    streamingMessageId,
     setCurrentConversation,
   };
 
