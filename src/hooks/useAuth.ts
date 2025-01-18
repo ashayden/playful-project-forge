@@ -6,52 +6,63 @@ import { logger } from '@/services/loggingService';
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    // Get initial session
     const initializeAuth = async () => {
       try {
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        // First get the initial session
+        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) throw sessionError;
+        
         if (mounted) {
           setSession(initialSession);
-          setIsInitialized(true);
-          setIsLoading(false);
+          // Keep loading true until we set up the subscription
         }
-      } catch (error) {
-        logger.error('Failed to get initial session:', error);
+
+        // Then set up the subscription for future changes
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+          logger.debug('Auth state changed:', { event: _event, session });
+          if (mounted) {
+            setSession(session);
+            setIsLoading(false);
+          }
+        });
+
+        // Only set loading to false after both initial session and subscription are set up
         if (mounted) {
           setIsLoading(false);
-          setIsInitialized(true);
+        }
+
+        return () => {
+          subscription.unsubscribe();
+        };
+      } catch (err) {
+        logger.error('Failed to initialize auth:', err);
+        if (mounted) {
+          setError(err instanceof Error ? err : new Error('Failed to initialize auth'));
+          setIsLoading(false);
         }
       }
     };
 
-    initializeAuth();
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      logger.debug('Auth state changed:', { event: _event, session });
-      
-      // Only update session if we're initialized and the component is still mounted
-      if (mounted && isInitialized) {
-        setSession(session);
-      }
-    });
+    const cleanup = initializeAuth();
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      cleanup?.then(unsubscribe => unsubscribe?.());
     };
-  }, [isInitialized]);
+  }, []);
 
   return {
     session,
     isLoading,
+    error,
     user: session?.user ?? null,
   };
 } 
