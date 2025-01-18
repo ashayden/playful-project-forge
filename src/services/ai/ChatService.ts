@@ -55,19 +55,25 @@ export class ChatService {
         .filter(msg => msg && msg.role && typeof msg.content === 'string')
         .map(msg => ({
           role: msg.role,
-          content: msg.content ?? ''
+          content: msg.content ?? '',
+          severity: msg.severity ?? 'info'
         }));
 
       // Ensure we have valid messages after filtering
       if (formattedMessages.length === 0) {
-        throw new Error('No valid messages to process');
+        const error = new Error('No valid messages to process');
+        logger.error('Error in chat service: No valid messages to process');
+        throw error;
       }
 
       // Get streaming response from AI service
       await this.aiService.processMessageStream(formattedMessages, {
         onToken: callbacks.onToken,
         onComplete: callbacks.onComplete,
-        onError: callbacks.onError,
+        onError: (error) => {
+          logger.error('Error in AI service:', error);
+          callbacks.onError?.(error);
+        },
       });
     } catch (error) {
       logger.error('Error in chat service:', error);
