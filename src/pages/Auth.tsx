@@ -62,11 +62,15 @@ const Auth = () => {
                     colors: {
                       brand: 'rgb(var(--primary))',
                       brandAccent: 'rgb(var(--primary))',
-                      inputBackground: 'transparent',
+                      inputBackground: 'rgb(var(--muted))',
                       inputText: 'rgb(var(--foreground))',
                       inputBorder: 'rgb(var(--border))',
                       inputBorderFocus: 'rgb(var(--ring))',
                       inputBorderHover: 'rgb(var(--border))',
+                      defaultButtonBackground: 'rgb(var(--muted))',
+                      defaultButtonBackgroundHover: 'rgb(var(--muted-foreground))',
+                      defaultButtonBorder: 'rgb(var(--border))',
+                      defaultButtonText: 'rgb(var(--foreground))',
                     },
                     borderWidths: {
                       buttonBorderWidth: '1px',
@@ -85,13 +89,15 @@ const Auth = () => {
                     fontWeight: '500',
                     border: '1px solid rgb(var(--border))',
                     transition: 'all 150ms',
-                    backgroundColor: 'rgb(var(--primary))',
-                    color: 'rgb(var(--primary-foreground))',
+                    backgroundColor: 'rgb(var(--muted))',
+                    color: 'rgb(var(--foreground))',
                   },
                   anchor: {
                     color: 'rgb(var(--primary))',
                     fontWeight: '500',
                     textDecoration: 'none',
+                    opacity: '1',
+                    transition: 'opacity 150ms',
                   },
                   container: {
                     gap: '1.25rem',
@@ -102,15 +108,17 @@ const Auth = () => {
                     fontSize: '0.875rem',
                   },
                   label: {
-                    color: 'rgb(var(--foreground))',
+                    color: 'rgb(var(--muted-foreground))',
                     marginBottom: '0.375rem',
                     fontSize: '0.875rem',
                     fontWeight: '500',
                   },
                   input: {
-                    backgroundColor: 'transparent',
+                    backgroundColor: 'rgb(var(--muted))',
                     borderColor: 'rgb(var(--border))',
+                    color: 'rgb(var(--foreground))',
                     transition: 'all 150ms',
+                    outline: 'none',
                   },
                 }
               }}
