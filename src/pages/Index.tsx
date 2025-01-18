@@ -7,32 +7,57 @@ import { LoadingState } from '@/components/LoadingSpinner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { withAuth } from '@/components/withAuth';
 import { logger } from '@/services/loggingService';
+import { useToast } from '@/hooks/use-toast';
 
 function ChatInterface() {
+  const { toast } = useToast();
   const {
-    messages,
+    messages = [],
     isLoading,
     error,
     sendMessage,
     isSending,
-    conversations,
+    conversations = [],
     createConversation,
     currentConversation,
     setCurrentConversation
   } = useChat();
 
   useEffect(() => {
-    if (!currentConversation && conversations?.length === 0) {
-      logger.debug('No conversation found, creating new one');
-      createConversation('New Chat');
-    } else if (!currentConversation && conversations?.length > 0) {
-      logger.debug('Setting current conversation to latest:', conversations[0]);
-      setCurrentConversation(conversations[0]);
-    }
-  }, [currentConversation, conversations, createConversation, setCurrentConversation]);
+    const initializeConversation = async () => {
+      try {
+        if (!currentConversation && conversations.length === 0) {
+          logger.debug('No conversation found, creating new one');
+          await createConversation('New Chat');
+        } else if (!currentConversation && conversations.length > 0) {
+          logger.debug('Setting current conversation to latest:', conversations[0]);
+          setCurrentConversation(conversations[0]);
+        }
+      } catch (err) {
+        logger.error('Failed to initialize conversation:', err);
+        toast({
+          title: "Error",
+          description: "Failed to create conversation. Please try again.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    initializeConversation();
+  }, [currentConversation, conversations, createConversation, setCurrentConversation, toast]);
 
   if (error) {
-    throw error;
+    logger.error('Chat interface error:', error);
+    return (
+      <ErrorBoundary>
+        <div className="flex flex-col h-screen items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold text-destructive">Something went wrong</h2>
+            <p className="mt-2 text-muted-foreground">{error.message}</p>
+          </div>
+        </div>
+      </ErrorBoundary>
+    );
   }
 
   if (isLoading) {
@@ -48,7 +73,7 @@ function ChatInterface() {
 
       <main className="flex-1 overflow-auto p-4 space-y-4">
         <ErrorBoundary>
-          {messages?.map((message) => (
+          {messages.map((message) => (
             <ChatMessage key={message.id} message={message} />
           ))}
         </ErrorBoundary>
