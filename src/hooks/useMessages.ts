@@ -37,7 +37,7 @@ export function useMessages(conversationId: string) {
                 if (!old) return old;
                 return old.map(msg => 
                   msg.id === payload.new.id 
-                    ? { ...msg, ...payload.new }
+                    ? { ...msg, ...payload.new, is_streaming: payload.new.is_streaming }
                     : msg
                 );
               });
@@ -46,13 +46,13 @@ export function useMessages(conversationId: string) {
             // Handle new messages
             if (payload.eventType === 'INSERT') {
               queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
-                const messages = [...(old || [])];
-                // Check if message already exists (avoid duplicates)
-                const exists = messages.some(msg => msg.id === payload.new.id);
+                if (!old) return [payload.new as Message];
+                // Check if message already exists
+                const exists = old.some(msg => msg.id === payload.new.id);
                 if (!exists) {
-                  messages.push(payload.new as Message);
+                  return [...old, payload.new as Message];
                 }
-                return messages;
+                return old;
               });
             }
           }
@@ -173,7 +173,8 @@ export function useMessages(conversationId: string) {
                 .from('messages')
                 .update({ 
                   content: streamedContent,
-                  is_streaming: true
+                  is_streaming: true,
+                  updated_at: new Date().toISOString()
                 })
                 .eq('id', streamingMessage.id);
 
@@ -191,7 +192,8 @@ export function useMessages(conversationId: string) {
                 .from('messages')
                 .update({ 
                   content: streamedContent,
-                  is_streaming: false
+                  is_streaming: false,
+                  updated_at: new Date().toISOString()
                 })
                 .eq('id', streamingMessage.id);
 

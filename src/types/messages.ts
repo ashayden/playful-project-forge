@@ -8,6 +8,7 @@ export interface Message {
   user_id: string | null;
   created_at?: string;
   reactions?: any[];
+  is_streaming?: boolean;
 }
 
 export interface MessageData {

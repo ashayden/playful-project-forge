@@ -34,7 +34,10 @@ export function ChatMessage({
 }: ChatMessageProps) {
   // Determine if this is an AI assistant message
   const isAssistant = message.role === 'assistant';
-  const isCurrentlyStreaming = isStreaming && streamingMessageId === message.id;
+  const isCurrentlyStreaming = isAssistant && (
+    (isStreaming && streamingMessageId === message.id) || 
+    message.is_streaming
+  );
   // Show typing indicator for AI messages that are typing or streaming
   const showTyping = isAssistant && (isTyping || isCurrentlyStreaming);
 
