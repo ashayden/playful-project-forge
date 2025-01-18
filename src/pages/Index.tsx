@@ -5,7 +5,6 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useChat } from '@/contexts/ChatContext';
 import { withAuth } from '@/components/withAuth';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 
 function ChatInterface() {
   const { messages, isLoading, currentConversation, sendMessage } = useChat();
