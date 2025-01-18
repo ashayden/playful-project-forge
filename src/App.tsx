@@ -9,6 +9,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProfileSkeleton } from "@/components/ui/skeleton";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,6 +62,7 @@ const App = () => (
           </TooltipProvider>
         </ChatProvider>
       </AuthProvider>
+      <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   </ErrorBoundary>
 );

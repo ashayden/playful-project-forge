@@ -1,88 +1,69 @@
-import { useState } from "react";
-import { Conversation } from "@/types/chat";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { User } from "@supabase/supabase-js";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Conversation } from '@/types/chat';
+import { logger } from '@/services/loggingService';
+
+const CONVERSATIONS_KEY = 'conversations';
 
 export function useConversations() {
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const createConversation = async (model: string, user: User | null): Promise<Conversation> => {
-    if (!user) throw new Error('User not authenticated');
-    
-    try {
-      const { data, error } = await supabase
-        .from('conversations')
-        .insert([{ model, user_id: user.id }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to create conversation",
-        variant: "destructive",
-      });
-      throw error;
-    }
-  };
-
-  const loadConversations = async () => {
-    try {
-      setIsLoading(true);
+  const { data: conversations = [], isLoading, error } = useQuery({
+    queryKey: [CONVERSATIONS_KEY],
+    queryFn: async () => {
+      logger.debug('Fetching conversations');
       const { data, error } = await supabase
         .from('conversations')
         .select('*')
-        .order('updated_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load conversations",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      if (error) {
+        logger.error('Error fetching conversations:', error);
+        throw error;
+      }
 
-  const loadConversation = async (id: string) => {
-    try {
-      setIsLoading(true);
-      const [conversationResponse, messagesResponse] = await Promise.all([
-        supabase.from('conversations').select('*').eq('id', id).single(),
-        supabase.from('messages').select('*').eq('conversation_id', id).order('created_at'),
-      ]);
+      return data as Conversation[];
+    },
+  });
 
-      if (conversationResponse.error) throw conversationResponse.error;
-      if (messagesResponse.error) throw messagesResponse.error;
+  const createConversation = useMutation({
+    mutationFn: async (title: string) => {
+      logger.debug('Creating new conversation:', title);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
 
-      return {
-        conversation: conversationResponse.data,
-        messages: messagesResponse.data,
-      };
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load conversation",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      const { data, error } = await supabase
+        .from('conversations')
+        .insert([{ 
+          title,
+          user_id: user.id,
+          model: 'gpt-4-turbo-preview' // default model
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        logger.error('Error creating conversation:', error);
+        throw error;
+      }
+
+      return data as Conversation;
+    },
+    onSuccess: (newConversation) => {
+      queryClient.setQueryData<Conversation[]>([CONVERSATIONS_KEY], (old = []) => 
+        [newConversation, ...old]
+      );
+    },
+  });
 
   return {
-    createConversation,
-    loadConversations,
-    loadConversation,
-    isLoading
+    conversations,
+    isLoading,
+    error,
+    createConversation: createConversation.mutate,
+    isCreating: createConversation.isPending,
   };
 }
