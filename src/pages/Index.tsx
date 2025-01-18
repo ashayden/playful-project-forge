@@ -14,7 +14,6 @@ const ChatInterface = () => {
   const { user, signOut } = useAuth();
   const { 
     state,
-    conversations,
     isLoading,
     error,
     createConversation,
@@ -50,7 +49,7 @@ const ChatInterface = () => {
     } else {
       logger.debug('No user authenticated');
     }
-  }, [user, state.currentConversation, isLoading]); // Run when user or conversation state changes
+  }, [user, state.currentConversation, isLoading]);
 
   if (error) {
     toast({

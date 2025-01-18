@@ -3,7 +3,6 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 import { ComponentPropsWithoutRef } from 'react';
-import { MessageReactions } from "./MessageReactions";
 import { Message } from "@/types/chat";
 
 interface ChatMessageProps {
@@ -53,7 +52,6 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
         >
           {message.content}
         </ReactMarkdown>
-        {message.reactions && <MessageReactions reactions={message.reactions} />}
       </div>
     </div>
   );
