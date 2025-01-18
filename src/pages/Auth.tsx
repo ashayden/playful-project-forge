@@ -3,13 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { Auth as SupabaseAuth } from "@supabase/auth-ui-react";
 import { ThemeSupa } from "@supabase/auth-ui-shared";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 const Auth = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if user is already authenticated
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error) {
         console.error("Session error:", error.message);
@@ -20,7 +18,6 @@ const Auth = () => {
       }
     });
 
-    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN" && session) {
         navigate("/");
@@ -35,98 +32,70 @@ const Auth = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-background to-background/80 p-4">
-      <div className="w-full max-w-md space-y-8">
-        <div className="space-y-4 text-center">
-          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent sm:text-5xl">
-            Playful Project Forge
-          </h1>
-          <p className="mx-auto max-w-[600px] text-muted-foreground text-lg/relaxed">
-            Your AI-powered development companion
-          </p>
-        </div>
-        <Card className="border-2 shadow-lg backdrop-blur-sm bg-card/95">
-          <CardHeader className="space-y-2">
-            <CardTitle className="text-2xl text-center font-semibold">Welcome Back</CardTitle>
-            <CardDescription className="text-center text-base text-muted-foreground">
-              Sign in to continue your development journey
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SupabaseAuth 
-              supabaseClient={supabase}
-              appearance={{ 
-                theme: ThemeSupa,
-                variables: {
-                  default: {
-                    colors: {
-                      brand: 'rgb(var(--primary))',
-                      brandAccent: 'rgb(var(--primary))',
-                      inputBackground: 'rgb(var(--muted))',
-                      inputText: 'rgb(var(--foreground))',
-                      inputBorder: 'rgb(var(--border))',
-                      inputBorderFocus: 'rgb(var(--ring))',
-                      inputBorderHover: 'rgb(var(--border))',
-                      defaultButtonBackground: 'rgb(var(--muted))',
-                      defaultButtonBackgroundHover: 'rgb(var(--muted-foreground))',
-                      defaultButtonBorder: 'rgb(var(--border))',
-                      defaultButtonText: 'rgb(var(--foreground))',
-                    },
-                    borderWidths: {
-                      buttonBorderWidth: '1px',
-                      inputBorderWidth: '1px',
-                    },
-                    radii: {
-                      borderRadiusButton: '0.75rem',
-                      buttonBorderRadius: '0.75rem',
-                      inputBorderRadius: '0.75rem',
-                    },
-                  }
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+      <div className="w-full max-w-[400px] px-4">
+        <h1 className="text-4xl font-bold text-center mb-2">Playful Project Forge</h1>
+        <p className="text-muted-foreground text-center mb-8">Your AI-powered development companion</p>
+        <div className="bg-card border rounded-lg p-4 shadow-lg">
+          <SupabaseAuth 
+            supabaseClient={supabase}
+            appearance={{
+              theme: ThemeSupa,
+              variables: {
+                default: {
+                  colors: {
+                    brand: '#7c3aed',
+                    brandAccent: '#6d28d9',
+                    brandButtonText: 'white',
+                    defaultButtonBackground: '#27272a',
+                    defaultButtonBackgroundHover: '#3f3f46',
+                    inputBackground: '#18181b',
+                    inputBorder: '#27272a',
+                    inputBorderHover: '#3f3f46',
+                    inputBorderFocus: '#6d28d9',
+                    inputText: 'white',
+                  },
+                  fonts: {
+                    bodyFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
+                    buttonFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
+                    inputFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
+                    labelFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
+                  },
                 },
-                style: {
-                  button: {
-                    padding: '1rem 1.5rem',
-                    fontWeight: '500',
-                    border: '1px solid rgb(var(--border))',
-                    transition: 'all 150ms',
-                    backgroundColor: 'rgb(var(--muted))',
-                    color: 'rgb(var(--foreground))',
-                  },
-                  anchor: {
-                    color: 'rgb(var(--primary))',
-                    fontWeight: '500',
-                    textDecoration: 'none',
-                    opacity: '1',
-                    transition: 'opacity 150ms',
-                  },
-                  container: {
-                    gap: '1.25rem',
-                  },
-                  message: {
-                    color: 'rgb(var(--destructive))',
-                    marginBottom: '0.75rem',
-                    fontSize: '0.875rem',
-                  },
-                  label: {
-                    color: 'rgb(var(--muted-foreground))',
-                    marginBottom: '0.375rem',
-                    fontSize: '0.875rem',
-                    fontWeight: '500',
-                  },
-                  input: {
-                    backgroundColor: 'rgb(var(--muted))',
-                    borderColor: 'rgb(var(--border))',
-                    color: 'rgb(var(--foreground))',
-                    transition: 'all 150ms',
-                    outline: 'none',
-                  },
-                }
-              }}
-              providers={[]}
-              redirectTo={window.location.origin}
-            />
-          </CardContent>
-        </Card>
+              },
+              style: {
+                button: {
+                  borderRadius: '6px',
+                  padding: '10px 15px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                },
+                input: {
+                  borderRadius: '6px',
+                  padding: '10px 15px',
+                  fontSize: '14px',
+                },
+                label: {
+                  fontSize: '14px',
+                  marginBottom: '4px',
+                  color: '#a1a1aa',
+                },
+                message: {
+                  fontSize: '14px',
+                  marginBottom: '12px',
+                },
+                anchor: {
+                  color: '#7c3aed',
+                  fontSize: '14px',
+                  textDecoration: 'none',
+                },
+              },
+            }}
+            theme="dark"
+            providers={[]}
+            redirectTo={window.location.origin}
+          />
+        </div>
       </div>
     </div>
   );
