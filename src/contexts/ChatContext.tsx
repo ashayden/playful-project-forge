@@ -1,214 +1,91 @@
-import { createContext, useContext, useReducer, ReactNode, useCallback } from "react";
-import { useAuth } from "@/components/AuthProvider";
-import { chatReducer } from "@/reducers/chatReducer";
-import { ChatState } from "@/types/chat";
-import { Message, MessageRole } from "@/types/messages";
-import { useChatMessages } from "@/hooks/useChatMessages";
-import { useConversations } from "@/hooks/useConversations";
-import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
-import { useToast } from "@/hooks/use-toast";
-import { logger } from "@/services/loggingService";
+import { createContext, useContext, useReducer, ReactNode } from 'react';
+import { Message, Conversation } from '@/types/chat';
+import { useMessages } from '@/hooks/useMessages';
+import { useConversations } from '@/hooks/useConversations';
+import { logger } from '@/services/loggingService';
 
-interface ChatContextType {
+type ChatState = {
+  conversations: Conversation[];
+  currentConversation: Conversation | null;
+  messages: Message[];
+};
+
+type ChatContextType = {
   state: ChatState;
-  createConversation: (model: string) => Promise<any>;
-  sendMessage: (content: string) => Promise<void>;
-  loadConversation: (id: string) => Promise<void>;
-  loadConversations: () => Promise<void>;
-}
+  conversations: Conversation[];
+  isLoading: boolean;
+  error: Error | null;
+  createConversation: (title: string) => void;
+  isCreating: boolean;
+  messages: Message[];
+  sendMessage: (content: string) => void;
+  isSending: boolean;
+  setCurrentConversation: (conversation: Conversation) => void;
+};
 
 const ChatContext = createContext<ChatContextType | null>(null);
 
-const initialState: ChatState = {
-  conversations: [],
-  currentConversation: null,
-  messages: [],
-  isLoading: false,
-  error: null,
-};
+type ChatAction =
+  | { type: 'SET_CURRENT_CONVERSATION'; payload: Conversation }
+  | { type: 'SET_MESSAGES'; payload: Message[] };
 
-const handleError = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message;
+function chatReducer(state: ChatState, action: ChatAction): ChatState {
+  switch (action.type) {
+    case 'SET_CURRENT_CONVERSATION':
+      return {
+        ...state,
+        currentConversation: action.payload,
+      };
+    case 'SET_MESSAGES':
+      return {
+        ...state,
+        messages: action.payload,
+      };
+    default:
+      return state;
   }
-  return 'An unexpected error occurred';
-};
+}
 
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(chatReducer, initialState);
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const { sendMessage: sendChatMessage } = useChatMessages();
-  const { 
-    createConversation: createNewConversation, 
-    loadConversations: loadAllConversations,
-    loadConversation: loadSingleConversation,
+  const [state, dispatch] = useReducer(chatReducer, {
+    conversations: [],
+    currentConversation: null,
+    messages: [],
+  });
+
+  const {
+    conversations,
+    isLoading,
+    error,
+    createConversation,
+    isCreating,
   } = useConversations();
 
-  // Memoize message handlers for real-time updates
-  const handleNewMessage = useCallback((message: Message) => {
-    logger.debug('Handling new real-time message', { messageId: message.id });
-    dispatch({ type: 'ADD_MESSAGE', payload: message });
-  }, []);
+  const {
+    messages,
+    sendMessage,
+    isSending,
+  } = useMessages(state.currentConversation?.id ?? '');
 
-  const handleUpdateMessage = useCallback((message: Message) => {
-    logger.debug('Handling real-time message update', { messageId: message.id });
-    if (message.id) {
-      dispatch({
-        type: 'UPDATE_MESSAGE',
-        payload: { id: message.id, content: message.content }
-      });
-    }
-  }, []);
-
-  // Set up real-time subscription
-  useRealtimeMessages(
-    state.currentConversation?.id,
-    handleNewMessage,
-    handleUpdateMessage
-  );
-
-  const createConversation = async (model: string) => {
-    logger.debug('Creating new conversation...', { model, userId: user?.id });
-    try {
-      if (!user) throw new Error("User not authenticated");
-      
-      const conversation = await createNewConversation(model, user);
-      logger.debug('Conversation created successfully:', { conversationId: conversation.id });
-      dispatch({ type: 'ADD_CONVERSATION', payload: conversation });
-      return conversation;
-    } catch (error) {
-      const errorMessage = handleError(error);
-      logger.error('Error in createConversation:', { error: errorMessage, model, userId: user?.id });
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      throw error;
-    }
+  const setCurrentConversation = (conversation: Conversation) => {
+    logger.debug('Setting current conversation:', conversation);
+    dispatch({ type: 'SET_CURRENT_CONVERSATION', payload: conversation });
   };
 
-  const loadConversations = async () => {
-    logger.debug('Loading all conversations...', { userId: user?.id });
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      const conversations = await loadAllConversations();
-      logger.debug('Conversations loaded successfully', { count: conversations.length });
-      dispatch({ type: 'SET_CONVERSATIONS', payload: conversations });
-    } catch (error) {
-      const errorMessage = handleError(error);
-      logger.error('Error in loadConversations:', { error: errorMessage, userId: user?.id });
-      toast({
-        title: "Error",
-        description: "Failed to load conversations",
-        variant: "destructive",
-      });
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
+  const value = {
+    state,
+    conversations,
+    isLoading,
+    error,
+    createConversation,
+    isCreating,
+    messages,
+    sendMessage: (content: string) => sendMessage({ content }),
+    isSending,
+    setCurrentConversation,
   };
 
-  const loadConversation = async (id: string) => {
-    logger.debug('Loading single conversation...', { conversationId: id, userId: user?.id });
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      const { conversation, messages } = await loadSingleConversation(id);
-      
-      const typedMessages: Message[] = messages.map(msg => ({
-        ...msg,
-        role: msg.role as MessageRole,
-        user_id: msg.user_id ?? null
-      }));
-      
-      logger.debug('Conversation loaded successfully', { 
-        conversationId: conversation.id, 
-        messageCount: messages.length 
-      });
-      
-      dispatch({ type: 'SET_CURRENT_CONVERSATION', payload: conversation });
-      dispatch({ type: 'SET_MESSAGES', payload: typedMessages });
-    } catch (error) {
-      const errorMessage = handleError(error);
-      logger.error('Error in loadConversation:', { error: errorMessage, conversationId: id });
-      toast({
-        title: "Error",
-        description: "Failed to load conversation",
-        variant: "destructive",
-      });
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  };
-
-  const sendMessage = async (content: string) => {
-    logger.debug('Attempting to send message...', { 
-      conversationId: state.currentConversation?.id,
-      userId: user?.id,
-      messageLength: content.length
-    });
-
-    if (!state.currentConversation || !user) {
-      logger.error('Cannot send message:', { 
-        hasConversation: !!state.currentConversation, 
-        hasUser: !!user 
-      });
-      toast({
-        title: "Error",
-        description: "No active conversation or user not authenticated",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-
-      logger.debug('Sending message to AI service...', {
-        conversationId: state.currentConversation.id,
-        messageCount: state.messages.length
-      });
-
-      // Send message - the real-time subscription will handle state updates
-      await sendChatMessage(
-        content,
-        state.currentConversation.id,
-        user.id,
-        state.messages,
-        (id: string, content: string) => {
-          logger.debug('Message content updated via callback', { messageId: id });
-        }
-      );
-
-      logger.debug('Message sent successfully');
-    } catch (error) {
-      const errorMessage = handleError(error);
-      logger.error('Error in sendMessage:', { 
-        error: errorMessage,
-        conversationId: state.currentConversation.id,
-        userId: user.id
-      });
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  };
-
-  return (
-    <ChatContext.Provider value={{
-      state,
-      createConversation,
-      sendMessage,
-      loadConversation,
-      loadConversations,
-    }}>
-      {children}
-    </ChatContext.Provider>
-  );
+  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
 
 export function useChat() {

@@ -5,21 +5,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useState } from "react";
 
-interface ModelSelectorProps {
-  value: string;
-  onChange: (value: string) => void;
-}
+export const ModelSelector = () => {
+  const [model, setModel] = useState("gpt-4-turbo-preview");
 
-export const ModelSelector = ({ value, onChange }: ModelSelectorProps) => {
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select value={model} onValueChange={setModel}>
       <SelectTrigger className="w-[180px]">
         <SelectValue placeholder="Select a model" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-        <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+        <SelectItem value="gpt-4-turbo-preview">GPT-4 Turbo</SelectItem>
+        <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
       </SelectContent>
     </Select>
   );

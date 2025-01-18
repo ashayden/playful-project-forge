@@ -4,11 +4,11 @@ import { SendHorizontal } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 interface ChatInputProps {
-  onSubmit: (content: string) => void;
-  isLoading?: boolean;
+  onSend: (content: string) => void;
+  disabled?: boolean;
 }
 
-export const ChatInput = ({ onSubmit, isLoading }: ChatInputProps) => {
+export const ChatInput = ({ onSend, disabled }: ChatInputProps) => {
   const [content, setContent] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -22,41 +22,37 @@ export const ChatInput = ({ onSubmit, isLoading }: ChatInputProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || isLoading) return;
-    
-    onSubmit(content);
+    if (!content.trim() || disabled) return;
+    onSend(content.trim());
     setContent("");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-4">
-      <div className="relative flex items-end gap-2">
-        <Textarea
-          ref={textareaRef}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
-          className="min-h-[60px] w-full resize-none rounded-md border bg-background px-4 py-2 focus-visible:ring-1"
-          disabled={isLoading}
-          rows={1}
-        />
-        <Button 
-          type="submit"
-          size="icon"
-          disabled={!content.trim() || isLoading}
-          className="shrink-0"
-        >
-          <SendHorizontal className="size-4" />
-        </Button>
-      </div>
+    <form onSubmit={handleSubmit} className="relative">
+      <Textarea
+        ref={textareaRef}
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Type a message..."
+        className="min-h-[60px] w-full resize-none bg-background pr-16"
+        disabled={disabled}
+      />
+      <Button
+        type="submit"
+        size="icon"
+        disabled={!content.trim() || disabled}
+        className="absolute bottom-2 right-2"
+      >
+        <SendHorizontal className="size-4" />
+      </Button>
     </form>
   );
 };

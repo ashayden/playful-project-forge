@@ -3,33 +3,36 @@ import { Button } from "@/components/ui/button";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ModelSelector } from "@/components/chat/ModelSelector";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useChat } from "@/contexts/ChatContext";
 import { useToast } from "@/hooks/use-toast";
 import { logger } from "@/services/loggingService";
 
 const ChatInterface = () => {
-  console.log('ChatInterface mounting...');
   logger.debug('ChatInterface initializing...');
   
   const { user, signOut } = useAuth();
-  const { state, sendMessage, createConversation, loadConversations } = useChat();
-  const [model, setModel] = useState('gpt-4o-mini');
+  const { 
+    state,
+    conversations,
+    isLoading,
+    error,
+    createConversation,
+    messages,
+    sendMessage,
+    isSending,
+  } = useChat();
   const { toast } = useToast();
 
   useEffect(() => {
     const initializeChat = async () => {
       logger.debug('Initializing chat...', { userId: user?.id });
       try {
-        logger.debug('Loading conversations...');
-        await loadConversations();
-        logger.debug('Conversations loaded:', { conversationCount: state.conversations.length });
-
         // Create initial conversation if none exists
-        if (!state.currentConversation) {
-          logger.debug('No current conversation, creating new one...', { model });
-          const newConversation = await createConversation(model);
-          logger.debug('Initial conversation created:', { conversationId: newConversation?.id });
+        if (!state.currentConversation && !isLoading) {
+          logger.debug('No current conversation, creating new one...');
+          createConversation('New Chat');
+          logger.debug('Initial conversation created');
         }
       } catch (error) {
         logger.error('Failed to initialize chat:', error);
@@ -47,93 +50,51 @@ const ChatInterface = () => {
     } else {
       logger.debug('No user authenticated');
     }
-  }, [user]); // Only run when user changes
+  }, [user, state.currentConversation, isLoading]); // Run when user or conversation state changes
 
-  const handleSubmit = async (content: string) => {
-    logger.debug('Chat submit triggered:', { content, userId: user?.id });
-    try {
-      // Ensure there's an active conversation
-      if (!state.currentConversation) {
-        logger.debug('No active conversation, creating new one...', { model });
-        const conversation = await createConversation(model);
-        if (!conversation) {
-          logger.error('Failed to create conversation');
-          toast({
-            title: "Error",
-            description: "Failed to create conversation",
-            variant: "destructive",
-          });
-          return;
-        }
-        logger.debug('New conversation created:', { conversationId: conversation.id });
-      }
-      
-      logger.debug('Sending message...', { 
-        conversationId: state.currentConversation?.id,
-        messageCount: state.messages.length 
-      });
-      await sendMessage(content);
-      logger.debug('Message sent successfully');
-    } catch (error) {
-      logger.error('Error in handleSubmit:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to send message",
-        variant: "destructive",
-      });
-    }
-  };
-
-  if (!user) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <p className="text-lg text-muted-foreground">Please sign in to continue</p>
-      </div>
-    );
+  if (error) {
+    toast({
+      title: "Error",
+      description: error.message,
+      variant: "destructive",
+    });
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background">
-      <header className="flex items-center justify-between border-b p-4">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold">AI Chat Assistant</h1>
-          <ModelSelector value={model} onChange={setModel} />
-        </div>
-        <div className="flex items-center gap-4">
-          <p className="text-sm text-muted-foreground">
-            {user?.email}
-          </p>
-          <Button onClick={signOut} variant="outline">
-            Sign Out
-          </Button>
-        </div>
+    <div className="flex flex-col h-screen">
+      <header className="flex justify-between items-center p-4 border-b">
+        <ModelSelector />
+        <Button onClick={() => signOut()}>Sign Out</Button>
       </header>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="container mx-auto max-w-4xl">
-          {state.messages.map((message, index) => (
+      <main className="flex-1 overflow-auto p-4 space-y-4">
+        {messages.map((message) => (
+          <ChatMessage key={message.id} message={message} />
+        ))}
+        {isSending && (
+          <div className="animate-pulse">
             <ChatMessage
-              key={message.id || index}
-              id={message.id}
-              role={message.role}
-              content={message.content}
-              reactions={message.reactions}
+              message={{
+                id: 'loading',
+                role: 'assistant',
+                content: 'Thinking...',
+                conversation_id: state.currentConversation?.id ?? '',
+                user_id: null,
+                created_at: new Date().toISOString(),
+              }}
             />
-          ))}
-        </div>
+          </div>
+        )}
       </main>
 
-      <footer className="border-t">
-        <div className="container mx-auto max-w-4xl">
-          <ChatInput onSubmit={handleSubmit} isLoading={state.isLoading} />
-        </div>
+      <footer className="p-4 border-t">
+        <ChatInput
+          onSend={sendMessage}
+          disabled={isSending || !state.currentConversation}
+        />
       </footer>
     </div>
   );
 };
 
-const Index = () => (
-  <ChatInterface />
-);
-
-export default Index;
+export default ChatInterface;
