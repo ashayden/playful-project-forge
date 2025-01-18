@@ -13,7 +13,7 @@ const ChatInterface = () => {
   
   const { user, signOut } = useAuth();
   const { 
-    state,
+    currentConversation,
     isLoading,
     error,
     createConversation,
@@ -30,7 +30,7 @@ const ChatInterface = () => {
       logger.debug('Initializing chat...', { userId: user?.id });
       try {
         // Create initial conversation if none exists
-        if (!state.currentConversation && !isLoading) {
+        if (!currentConversation && !isLoading) {
           logger.debug('No current conversation, creating new one...');
           createConversation('New Chat');
         }
@@ -50,15 +50,15 @@ const ChatInterface = () => {
     } else {
       logger.debug('No user authenticated');
     }
-  }, [user, state.currentConversation, isLoading, createConversation]);
+  }, [user, currentConversation, isLoading, createConversation]);
 
   // Set current conversation when a new one is created
   useEffect(() => {
-    if (conversations.length > 0 && !state.currentConversation) {
+    if (conversations.length > 0 && !currentConversation) {
       logger.debug('Setting current conversation to latest:', conversations[0]);
       setCurrentConversation(conversations[0]);
     }
-  }, [conversations, state.currentConversation, setCurrentConversation]);
+  }, [conversations, currentConversation, setCurrentConversation]);
 
   if (error) {
     toast({
@@ -86,7 +86,7 @@ const ChatInterface = () => {
                 id: 'loading',
                 role: 'assistant',
                 content: 'Thinking...',
-                conversation_id: state.currentConversation?.id ?? '',
+                conversation_id: currentConversation?.id ?? '',
                 user_id: null,
                 created_at: new Date().toISOString(),
               }}
@@ -98,7 +98,7 @@ const ChatInterface = () => {
       <footer className="p-4 border-t">
         <ChatInput
           onSend={sendMessage}
-          disabled={isSending || !state.currentConversation}
+          disabled={isSending || !currentConversation}
         />
       </footer>
     </div>

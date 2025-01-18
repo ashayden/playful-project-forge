@@ -1,17 +1,11 @@
-import { createContext, useContext, useReducer, ReactNode } from 'react';
+import { createContext, useContext, ReactNode, useState } from 'react';
 import { Message, Conversation } from '@/types/chat';
 import { useMessages } from '@/hooks/useMessages';
 import { useConversations } from '@/hooks/useConversations';
 import { logger } from '@/services/loggingService';
 
-type ChatState = {
-  conversations: Conversation[];
-  currentConversation: Conversation | null;
-  messages: Message[];
-};
-
 type ChatContextType = {
-  state: ChatState;
+  currentConversation: Conversation | null;
   conversations: Conversation[];
   isLoading: boolean;
   error: Error | null;
@@ -25,55 +19,25 @@ type ChatContextType = {
 
 const ChatContext = createContext<ChatContextType | null>(null);
 
-type ChatAction =
-  | { type: 'SET_CURRENT_CONVERSATION'; payload: Conversation }
-  | { type: 'SET_MESSAGES'; payload: Message[] };
-
-function chatReducer(state: ChatState, action: ChatAction): ChatState {
-  switch (action.type) {
-    case 'SET_CURRENT_CONVERSATION':
-      return {
-        ...state,
-        currentConversation: action.payload,
-      };
-    case 'SET_MESSAGES':
-      return {
-        ...state,
-        messages: action.payload,
-      };
-    default:
-      return state;
-  }
-}
-
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(chatReducer, {
-    conversations: [],
-    currentConversation: null,
-    messages: [],
-  });
-
   const {
-    conversations,
+    conversations = [],
     isLoading,
     error,
     createConversation,
     isCreating,
   } = useConversations();
 
+  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
+
   const {
-    messages,
+    messages = [],
     sendMessage,
     isSending,
-  } = useMessages(state.currentConversation?.id ?? '');
-
-  const setCurrentConversation = (conversation: Conversation) => {
-    logger.debug('Setting current conversation:', conversation);
-    dispatch({ type: 'SET_CURRENT_CONVERSATION', payload: conversation });
-  };
+  } = useMessages(currentConversation?.id ?? '');
 
   const value = {
-    state,
+    currentConversation,
     conversations,
     isLoading,
     error,
