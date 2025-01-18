@@ -98,13 +98,63 @@ export function useMessages(conversationId: string) {
 
       return { userMessage };
     },
-    onSuccess: (data) => {
-      queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], (old = []) => {
-        const newMessages = [...old];
+    onMutate: async ({ content }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: [MESSAGES_KEY, conversationId] });
+
+      // Snapshot the previous value
+      const previousMessages = queryClient.getQueryData<Message[]>([MESSAGES_KEY, conversationId]);
+
+      // Create optimistic user message
+      const optimisticUserMessage: Message = {
+        id: `temp-${Date.now()}`,
+        role: 'user',
+        content,
+        conversation_id: conversationId,
+        user_id: (await supabase.auth.getUser()).data.user?.id ?? null,
+        created_at: new Date().toISOString(),
+      };
+
+      // Create optimistic assistant message
+      const optimisticAssistantMessage: Message = {
+        id: `temp-${Date.now()}-assistant`,
+        role: 'assistant',
+        content: 'Thinking...',
+        conversation_id: conversationId,
+        user_id: null,
+        created_at: new Date().toISOString(),
+      };
+
+      // Optimistically update the messages
+      queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => [
+        ...(old || []),
+        optimisticUserMessage,
+        optimisticAssistantMessage,
+      ]);
+
+      return { previousMessages, optimisticUserMessage, optimisticAssistantMessage };
+    },
+    onError: (err, variables, context) => {
+      logger.error('Error in message mutation:', err);
+      // Revert back to the previous state if there's an error
+      if (context?.previousMessages) {
+        queryClient.setQueryData([MESSAGES_KEY, conversationId], context.previousMessages);
+      }
+    },
+    onSuccess: (data, variables, context) => {
+      queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
+        const messages = [...(old || [])];
+        // Remove optimistic messages
+        const filteredMessages = messages.filter(
+          msg => msg.id !== context?.optimisticUserMessage.id && 
+                 msg.id !== context?.optimisticAssistantMessage.id
+        );
+        // Add real messages
+        const newMessages = [...filteredMessages];
         if (data.userMessage) {
           newMessages.push(data.userMessage);
         }
-        if ('assistantMessage' in data && data.assistantMessage) {
+        if (data.assistantMessage) {
           newMessages.push(data.assistantMessage);
         }
         return newMessages;
