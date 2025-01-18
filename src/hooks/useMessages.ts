@@ -46,8 +46,13 @@ export function useMessages(conversationId: string) {
             // Handle new messages
             if (payload.eventType === 'INSERT') {
               queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
-                if (!old) return [payload.new as Message];
-                return [...old, payload.new as Message];
+                const messages = [...(old || [])];
+                // Check if message already exists (avoid duplicates)
+                const exists = messages.some(msg => msg.id === payload.new.id);
+                if (!exists) {
+                  messages.push(payload.new as Message);
+                }
+                return messages;
               });
             }
           }
@@ -83,13 +88,10 @@ export function useMessages(conversationId: string) {
       return (data || []) as Message[];
     },
     enabled: !!conversationId,
-    refetchInterval: 30000,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
     staleTime: 10000,
     gcTime: 5 * 60 * 1000,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    refetchOnWindowFocus: false, // Disable automatic refetch
+    refetchOnReconnect: false, // Rely on realtime updates instead
   });
 
   const sendMessage = useMutation({
@@ -131,7 +133,7 @@ export function useMessages(conversationId: string) {
               role: 'assistant' as const,
               conversation_id: conversationId,
               user_id: user.id,
-              is_streaming: true // Add streaming status
+              is_streaming: true
             }])
             .select()
             .single();
@@ -147,20 +149,31 @@ export function useMessages(conversationId: string) {
 
           const streamingMessage = assistantMessage as Message & { id: string };
           let streamedContent = '';
-          let batchedContent = '';
-          let updateTimeout: NodeJS.Timeout;
           
           // Set streaming state
           setStreamingMessageId(streamingMessage.id);
 
-          // Batch update function
-          const updateMessageContent = async (content: string, isComplete = false) => {
-            try {
+          // Prepare messages for AI processing
+          const messagesForAI = [...messages, userMessage].map(msg => ({
+            role: msg.role,
+            content: msg.content ?? '',
+            id: msg.id ?? '',
+            conversation_id: msg.conversation_id,
+            user_id: msg.user_id,
+            created_at: msg.created_at
+          })) as Message[];
+
+          // Process the message with streaming
+          await chatService.processMessageStream(messagesForAI, {
+            onToken: async (token: string) => {
+              streamedContent += token;
+              
+              // Update the message content in the database
               const { error: updateError } = await supabase
                 .from('messages')
                 .update({ 
-                  content,
-                  is_streaming: !isComplete
+                  content: streamedContent,
+                  is_streaming: true
                 })
                 .eq('id', streamingMessage.id);
 
@@ -168,49 +181,28 @@ export function useMessages(conversationId: string) {
                 logger.error('Error updating streaming message:', updateError);
                 throw updateError;
               }
-            } catch (error) {
-              logger.error('Error in batch update:', error);
-            }
-          };
-
-          // Prepare messages for AI processing
-          const messagesForAI = [...messages, userMessage].map(msg => ({
-            ...msg,
-            content: msg.content ?? '',
-            id: msg.id ?? '',
-          }));
-
-          // Process the message with streaming
-          await chatService.processMessageStream(messagesForAI, {
-            onToken: async (token: string) => {
-              streamedContent += token;
-              batchedContent += token;
-
-              // Batch updates
-              if (updateTimeout) clearTimeout(updateTimeout);
-              updateTimeout = setTimeout(() => {
-                updateMessageContent(streamedContent);
-                batchedContent = '';
-              }, 100); // Batch updates every 100ms
             },
             onComplete: async () => {
               // Clear streaming state
               setStreamingMessageId(null);
               
               // Final update
-              await updateMessageContent(streamedContent, true);
+              const { error: finalUpdateError } = await supabase
+                .from('messages')
+                .update({ 
+                  content: streamedContent,
+                  is_streaming: false
+                })
+                .eq('id', streamingMessage.id);
 
-              // Clear any pending updates
-              if (updateTimeout) {
-                clearTimeout(updateTimeout);
+              if (finalUpdateError) {
+                logger.error('Error finalizing streaming message:', finalUpdateError);
+                throw finalUpdateError;
               }
             },
             onError: (error) => {
-              // Clear streaming state and timeout on error
+              // Clear streaming state on error
               setStreamingMessageId(null);
-              if (updateTimeout) {
-                clearTimeout(updateTimeout);
-              }
               logger.error('Error in streaming:', error);
               throw error;
             }
@@ -247,24 +239,15 @@ export function useMessages(conversationId: string) {
         created_at: new Date().toISOString(),
       };
 
-      // Create optimistic assistant message
-      const optimisticAssistantMessage: Message = {
-        id: `temp-assistant-${Date.now()}`,
-        role: 'assistant',
-        content: '',
-        conversation_id: conversationId,
-        user_id: (await supabase.auth.getUser()).data.user?.id ?? null,
-        created_at: new Date().toISOString(),
-      };
-
       // Optimistically update the messages
-      queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => [
-        ...(old || []),
-        optimisticUserMessage,
-        optimisticAssistantMessage,
-      ]);
+      queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
+        const messages = [...(old || [])];
+        // Remove any existing optimistic messages
+        const filteredMessages = messages.filter(msg => msg.id && msg.id.startsWith && !msg.id.startsWith('temp-'));
+        return [...filteredMessages, optimisticUserMessage];
+      });
 
-      return { previousMessages, optimisticUserMessage, optimisticAssistantMessage };
+      return { previousMessages, optimisticUserMessage };
     },
     onError: (err, _variables, context) => {
       logger.error('Error in message mutation:', err);
@@ -273,26 +256,16 @@ export function useMessages(conversationId: string) {
         queryClient.setQueryData([MESSAGES_KEY, conversationId], context.previousMessages);
       }
     },
-    onSuccess: (data, _variables, context) => {
+    onSuccess: (data, _variables) => {
       queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
-        const messages = [...(old || [])];
-        // Remove optimistic messages
-        const filteredMessages = messages.filter(
-          msg => msg.id !== context?.optimisticUserMessage.id && 
-                 msg.id !== context?.optimisticAssistantMessage?.id
-        );
-        // Add real messages
-        const newMessages = [...filteredMessages];
+        if (!old) return old;
+        // Remove optimistic messages and add real ones
+        const messages = old.filter(msg => msg.id && msg.id.startsWith && !msg.id.startsWith('temp-'));
         if (data.userMessage) {
-          newMessages.push(data.userMessage);
+          messages.push(data.userMessage);
         }
-        if (data.assistantMessage) {
-          newMessages.push(data.assistantMessage);
-        }
-        return newMessages;
+        return messages;
       });
-      // Invalidate and refetch after successful mutation
-      queryClient.invalidateQueries({ queryKey: [MESSAGES_KEY, conversationId] });
     },
   });
 

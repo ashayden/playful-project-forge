@@ -34,8 +34,8 @@ const Auth = () => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#1E1E1E]">
       <div className="w-full max-w-[400px] px-4">
-        <h1 className="text-4xl font-bold text-center mb-2 text-zinc-100">Playful Project Forge</h1>
-        <p className="text-zinc-400 text-center mb-8">Your AI-powered development companion</p>
+        <h1 className="text-4xl font-bold text-center mb-2 text-zinc-100">Chat Assistant Test v001</h1>
+        <p className="text-zinc-400 text-center mb-8">Built with React + TypeScript, using LangChain for AI processing and Supabase for real-time data and auth.</p>
         <div className="bg-zinc-900 border-zinc-800 border rounded-lg p-4 shadow-lg">
           <SupabaseAuth 
             supabaseClient={supabase}
