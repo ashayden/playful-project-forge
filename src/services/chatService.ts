@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { Message } from "@/types/chat";
+import { Message } from "@/types/messages";
 import { PostgrestError } from "@supabase/supabase-js";
 
 export class ChatService {

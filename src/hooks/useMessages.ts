@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Message } from '@/types/chat';
+import { Message } from '@/types/messages';
 import { logger } from '@/services/loggingService';
 import { ChatService } from '@/services/ai/ChatService';
 import { useState, useEffect } from 'react';

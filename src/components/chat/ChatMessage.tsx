@@ -1,4 +1,4 @@
-import { Message } from '@/types/chat';
+import { Message } from '@/types/messages';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
