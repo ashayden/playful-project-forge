@@ -54,7 +54,7 @@ export function useConversations() {
         .insert([{
           title,
           user_id: user.id,
-          model: 'gpt-4o-mini'
+          model: 'gpt-4-turbo-preview'
         }])
         .select()
         .single();
@@ -74,11 +74,34 @@ export function useConversations() {
     },
   });
 
+  const deleteConversation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      logger.debug('Deleting conversation:', conversationId);
+      const { error } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', conversationId);
+
+      if (error) {
+        logger.error('Error deleting conversation:', error);
+        throw error;
+      }
+    },
+    onSuccess: (_, conversationId) => {
+      queryClient.setQueryData<Conversation[]>([CONVERSATIONS_KEY], old => {
+        if (!old) return old;
+        return old.filter(conversation => conversation.id !== conversationId);
+      });
+    },
+  });
+
   return {
     conversations,
     isLoading,
     error,
     createConversation: createConversation.mutate,
     isCreating: createConversation.isPending,
+    deleteConversation: deleteConversation.mutate,
+    isDeleting: deleteConversation.isPending,
   };
 }

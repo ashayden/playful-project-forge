@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode, useState, useEffect } from 'react';
+import { createContext, ReactNode, useState, useEffect } from 'react';
 import { Message } from '@/types/messages';
 import { Conversation } from '@/types/chat';
 import { useMessages } from '@/hooks/useMessages';
@@ -6,13 +6,15 @@ import { useConversations } from '@/hooks/useConversations';
 import { useAuth } from '@/hooks/useAuth';
 import { logger } from '@/services/loggingService';
 
-type ChatContextType = {
+export type ChatContextType = {
   currentConversation: Conversation | null;
   conversations: Conversation[];
   isLoading: boolean;
   error: Error | null;
   createConversation: (title: string) => void;
   isCreating: boolean;
+  deleteConversation: (id: string) => void;
+  isDeleting: boolean;
   messages: Message[];
   sendMessage: (content: string) => void;
   deleteMessage: (messageId: string) => Promise<void>;
@@ -22,7 +24,7 @@ type ChatContextType = {
   setCurrentConversation: (conversation: Conversation) => void;
 };
 
-const ChatContext = createContext<ChatContextType | null>(null);
+export const ChatContext = createContext<ChatContextType | null>(null);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
@@ -32,6 +34,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     error: conversationsError,
     createConversation,
     isCreating,
+    deleteConversation,
+    isDeleting,
   } = useConversations();
 
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
@@ -94,6 +98,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     error,
     createConversation,
     isCreating,
+    deleteConversation,
+    isDeleting,
     messages,
     sendMessage: (content: string) => sendMessage.mutate({ content }),
     deleteMessage,
@@ -104,12 +110,4 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
-}
-
-export function useChat() {
-  const context = useContext(ChatContext);
-  if (!context) {
-    throw new Error('useChat must be used within a ChatProvider');
-  }
-  return context;
 }
