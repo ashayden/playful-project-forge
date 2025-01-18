@@ -32,11 +32,11 @@ const Auth = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#1E1E1E]">
       <div className="w-full max-w-[400px] px-4">
-        <h1 className="text-4xl font-bold text-center mb-2">Playful Project Forge</h1>
-        <p className="text-muted-foreground text-center mb-8">Your AI-powered development companion</p>
-        <div className="bg-card border rounded-lg p-4 shadow-lg">
+        <h1 className="text-4xl font-bold text-center mb-2 text-zinc-100">Playful Project Forge</h1>
+        <p className="text-zinc-400 text-center mb-8">Your AI-powered development companion</p>
+        <div className="bg-zinc-900 border-zinc-800 border rounded-lg p-4 shadow-lg">
           <SupabaseAuth 
             supabaseClient={supabase}
             appearance={{
@@ -54,6 +54,7 @@ const Auth = () => {
                     inputBorderHover: '#3f3f46',
                     inputBorderFocus: '#6d28d9',
                     inputText: 'white',
+                    dividerBackground: '#27272a',
                   },
                   fonts: {
                     bodyFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
