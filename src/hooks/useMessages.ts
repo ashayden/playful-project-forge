@@ -211,12 +211,14 @@ export function useMessages(conversationId: string) {
           // Filter out temporary messages and ensure we have valid messages
           const validMessages = existingMessages.filter(msg => 
             msg && msg.id && !msg.id.startsWith('temp-') && 
-            msg.role && typeof msg.content === 'string'
+            msg.role && typeof msg.content === 'string' &&
+            !msg.is_streaming // Filter out any messages that are still streaming
           );
 
           logger.debug('Processing message with context:', {
             messageCount: validMessages.length,
-            newMessage: { content, role }
+            newMessage: { content, role },
+            streamingMessageId
           });
 
           // Create optimistic AI message
@@ -238,6 +240,17 @@ export function useMessages(conversationId: string) {
           });
 
           let isStreaming = true;
+          let batchTimeout: NodeJS.Timeout | null = null;
+
+          // Define cleanup function
+          const cleanupStreamingState = () => {
+            setStreamingMessageId(null);
+            if (batchTimeout) {
+              clearTimeout(batchTimeout);
+              batchTimeout = null;
+            }
+            isStreaming = false;
+          };
 
           try {
             // Create a placeholder assistant message
@@ -264,10 +277,15 @@ export function useMessages(conversationId: string) {
 
             const streamingMessage = assistantMessage as Message & { id: string };
             let streamedContent = '';
-            let batchTimeout: NodeJS.Timeout | null = null;
             let pendingContent = '';
             
-            // Set streaming state
+            // Clear any existing streaming state
+            if (streamingMessageId) {
+              logger.debug('Clearing previous streaming state:', streamingMessageId);
+              setStreamingMessageId(null);
+            }
+            
+            // Set new streaming state
             setStreamingMessageId(streamingMessage.id);
 
             // Process the message with streaming
@@ -295,14 +313,14 @@ export function useMessages(conversationId: string) {
 
                         if (updateError) {
                           logger.error('Error updating streaming message:', updateError);
-                          isStreaming = false;
+                          cleanupStreamingState();
                           throw updateError;
                         }
 
                         pendingContent = '';
                       } catch (error) {
                         logger.error('Error in batch update:', error);
-                        isStreaming = false;
+                        cleanupStreamingState();
                         throw error;
                       }
                     }
@@ -313,12 +331,7 @@ export function useMessages(conversationId: string) {
               onComplete: async () => {
                 try {
                   // Clear any pending timeout
-                  if (batchTimeout) {
-                    clearTimeout(batchTimeout);
-                    batchTimeout = null;
-                  }
-
-                  isStreaming = false;
+                  cleanupStreamingState();
 
                   // Final update with complete content
                   const finalContent = streamedContent + pendingContent;
@@ -335,9 +348,6 @@ export function useMessages(conversationId: string) {
                     logger.error('Error in final update:', finalUpdateError);
                     throw finalUpdateError;
                   }
-
-                  // Clear streaming state
-                  setStreamingMessageId(null);
                 } catch (error) {
                   logger.error('Error in onComplete:', error);
                   throw error;
@@ -345,12 +355,7 @@ export function useMessages(conversationId: string) {
               },
               onError: async (error) => {
                 // Clear streaming state and timeout
-                isStreaming = false;
-                setStreamingMessageId(null);
-                if (batchTimeout) {
-                  clearTimeout(batchTimeout);
-                  batchTimeout = null;
-                }
+                cleanupStreamingState();
 
                 try {
                   // Update message with error
@@ -380,9 +385,7 @@ export function useMessages(conversationId: string) {
               assistantMessage: { ...streamingMessage, content: streamedContent }
             };
           } catch (error) {
-            // Clear streaming state
-            isStreaming = false;
-            setStreamingMessageId(null);
+            cleanupStreamingState();
             logger.error('Error processing message with AI:', error);
             throw error;
           }
