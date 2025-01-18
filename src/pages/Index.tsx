@@ -12,9 +12,9 @@ import { cn } from '@/lib/utils';
 export default function Index() {
   return (
     <ErrorBoundary>
-      <div className="flex h-screen overflow-hidden">
+      <div className="flex h-screen overflow-hidden bg-background">
         <ConversationSidebar />
-        <div className="flex-1 flex flex-col min-w-0 bg-[#1E1E1E]">
+        <div className="flex-1 flex flex-col min-w-0">
           <ChatInterface />
         </div>
       </div>

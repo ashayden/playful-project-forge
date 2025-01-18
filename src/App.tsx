@@ -1,70 +1,54 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/components/AuthProvider";
-import { ChatProvider } from "@/contexts/ChatContext";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { ProfileSkeleton } from "@/components/ui/skeleton";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
+/**
+ * Root application component that sets up the app's providers and routing.
+ * Includes providers for:
+ * - Error Boundary: Global error handling
+ * - React Query: Data fetching and caching
+ * - React Router: Client-side routing
+ * - Auth: User authentication
+ * - Chat: Chat functionality
+ * - UI Components: Tooltips and notifications
+ */
+
+import { BrowserRouter } from 'react-router-dom';
+import { Toaster } from '@/components/ui/toaster';
+import { Toaster as Sonner } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider } from '@/components/AuthProvider';
+import { ChatProvider } from '@/contexts/ChatContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { Routes } from './components/Routes';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
+// Configure React Query client with optimal settings for chat application
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
+      retry: 1, // Only retry failed queries once
+      refetchOnWindowFocus: false, // Disable automatic refetch on window focus
     },
   },
 });
 
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
-  
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <ProfileSkeleton />
-      </div>
-    );
-  }
-  
-  if (!user) {
-    return <Navigate to="/auth" replace />;
-  }
-  
-  return <>{children}</>;
-};
-
-const App = () => (
-  <ErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ChatProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <Routes>
-                <Route path="/auth" element={<Auth />} />
-                <Route
-                  path="/"
-                  element={
-                    <ProtectedRoute>
-                      <Index />
-                    </ProtectedRoute>
-                  }
-                />
-              </Routes>
-            </BrowserRouter>
-          </TooltipProvider>
-        </ChatProvider>
-      </AuthProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
-    </QueryClientProvider>
-  </ErrorBoundary>
-);
-
-export default App;
+export default function App() {
+  return (
+    <div className="dark">
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <AuthProvider>
+              <ChatProvider>
+                <TooltipProvider>
+                  <Toaster />
+                  <Sonner />
+                  <Routes />
+                </TooltipProvider>
+              </ChatProvider>
+            </AuthProvider>
+          </BrowserRouter>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </div>
+  );
+}

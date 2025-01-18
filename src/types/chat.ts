@@ -51,6 +51,7 @@ export type ChatAction =
   | { type: 'SET_CONVERSATIONS'; payload: Conversation[] }
   | { type: 'SET_CURRENT_CONVERSATION'; payload: Conversation }
   | { type: 'ADD_CONVERSATION'; payload: Conversation }
+  | { type: 'DELETE_CONVERSATION'; payload: string }
   | { type: 'SET_MESSAGES'; payload: Message[] }
   | { type: 'ADD_MESSAGE'; payload: Message }
   | { type: 'UPDATE_MESSAGE'; payload: { id: string; content: string } }
