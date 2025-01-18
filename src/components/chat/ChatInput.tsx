@@ -37,14 +37,14 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         onKeyDown={handleKeyDown}
         placeholder="Send a message..."
         spellCheck={false}
-        className="min-h-[60px] w-full resize-none bg-zinc-900 pr-12 text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-600 focus:ring-offset-0"
+        className="min-h-[60px] w-full resize-none bg-background pr-12 text-foreground placeholder:text-muted-foreground focus:outline-none"
         disabled={disabled}
       />
       <Button
         type="submit"
         size="icon"
         disabled={disabled || !input.trim()}
-        className="absolute bottom-3 right-3 h-8 w-8 bg-zinc-700 hover:bg-zinc-600"
+        className="absolute bottom-3 right-3 h-8 w-8"
       >
         <SendIcon className="h-4 w-4" />
         <span className="sr-only">Send message</span>

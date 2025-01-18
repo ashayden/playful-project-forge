@@ -1,71 +1,44 @@
 import { useState, useEffect } from 'react';
-import { RealtimeChannel } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
-import { logger } from '@/services/loggingService';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
 
-interface SupabaseStatus {
-  isConnected: boolean;
+export type SupabaseStatus = {
+  status: 'connected' | 'disconnected';
   latency: number;
-}
+};
 
 export function useSupabaseStatus(): SupabaseStatus {
-  const [isConnected, setIsConnected] = useState(true);
+  const supabase = useSupabaseClient();
+  const [status, setStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [latency, setLatency] = useState(0);
 
   useEffect(() => {
     let mounted = true;
-    let pingInterval: NodeJS.Timeout;
-    let channel: RealtimeChannel;
+    let interval: NodeJS.Timeout;
 
     const checkConnection = async () => {
+      const start = Date.now();
       try {
-        const start = Date.now();
-        const { error } = await supabase.from('messages').select('count', { count: 'exact', head: true });
-        const end = Date.now();
-        
+        await supabase.from('health_check').select('count').single();
         if (mounted) {
-          setIsConnected(!error);
-          setLatency(end - start);
-        }
-
-        if (error) {
-          logger.warn('Connection check failed:', error.message);
+          setStatus('connected');
+          setLatency(Date.now() - start);
         }
       } catch (error) {
         if (mounted) {
-          setIsConnected(false);
+          setStatus('disconnected');
           setLatency(0);
         }
-        logger.error('Connection check error:', error);
       }
     };
 
-    const setupRealtimeSubscription = () => {
-      channel = supabase.channel('system_health');
-      channel
-        .subscribe((status) => {
-          if (mounted) {
-            setIsConnected(status === 'SUBSCRIBED');
-            logger.debug('Realtime subscription status:', status);
-          }
-        });
-    };
-
-    // Initial setup
     checkConnection();
-    setupRealtimeSubscription();
-
-    // Set up periodic checks
-    pingInterval = setInterval(checkConnection, 30000); // Check every 30 seconds
+    interval = setInterval(checkConnection, 30000);
 
     return () => {
       mounted = false;
-      clearInterval(pingInterval);
-      if (channel) {
-        channel.unsubscribe();
-      }
+      clearInterval(interval);
     };
-  }, []);
+  }, [supabase]);
 
-  return { isConnected, latency };
+  return { status, latency };
 } 

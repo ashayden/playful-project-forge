@@ -18,18 +18,18 @@ export function ChatMessage({ message, isTyping, isStreaming, onDelete }: ChatMe
   return (
     <div className={cn(
       'group flex items-start gap-4 rounded-lg px-4 py-3',
-      isUser && 'bg-zinc-900/50',
-      isAssistant && 'bg-zinc-800/50'
+      isUser && 'bg-muted/50',
+      isAssistant && 'bg-muted'
     )}>
       <div className={cn(
         'flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md border text-sm font-semibold',
-        isUser && 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-        isAssistant && 'bg-green-500/10 text-green-500 border-green-500/20'
+        isUser && 'bg-primary/10 text-primary border-primary/20',
+        isAssistant && 'bg-secondary/10 text-secondary border-secondary/20'
       )}>
         {isUser ? 'U' : 'AI'}
       </div>
       <div className="flex-1 space-y-2 overflow-hidden">
-        <div className="prose prose-zinc dark:prose-invert max-w-none">
+        <div className="prose prose-neutral dark:prose-invert max-w-none">
           <p className="whitespace-pre-wrap">
             {message.content}
             {(isTyping || isStreaming) && <LoadingDots />}
