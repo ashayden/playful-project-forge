@@ -2,7 +2,6 @@ import { createContext, useContext, ReactNode, useState } from 'react';
 import { Message, Conversation } from '@/types/chat';
 import { useMessages } from '@/hooks/useMessages';
 import { useConversations } from '@/hooks/useConversations';
-import { logger } from '@/services/loggingService';
 
 type ChatContextType = {
   currentConversation: Conversation | null;
