@@ -1,34 +1,26 @@
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { SendHorizontal } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { SendIcon } from 'lucide-react';
+import { useRef, useState } from 'react';
 
 interface ChatInputProps {
-  onSend: (content: string) => void;
+  onSend: (message: string) => void;
   disabled?: boolean;
 }
 
-export const ChatInput = ({ onSend, disabled }: ChatInputProps) => {
-  const [content, setContent] = useState("");
+export function ChatInput({ onSend, disabled }: ChatInputProps) {
+  const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "0px";
-      const scrollHeight = textareaRef.current.scrollHeight;
-      textareaRef.current.style.height = scrollHeight + "px";
-    }
-  }, [content]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || disabled) return;
-    onSend(content.trim());
-    setContent("");
+    if (!input.trim() || disabled) return;
+    onSend(input);
+    setInput('');
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
     }
@@ -38,21 +30,25 @@ export const ChatInput = ({ onSend, disabled }: ChatInputProps) => {
     <form onSubmit={handleSubmit} className="relative">
       <Textarea
         ref={textareaRef}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
+        tabIndex={0}
+        rows={1}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Type a message..."
-        className="min-h-[60px] w-full resize-none bg-background pr-16"
+        placeholder="Send a message..."
+        spellCheck={false}
+        className="min-h-[60px] w-full resize-none bg-zinc-800/40 pr-12 text-zinc-100 focus:outline-none focus:ring-0 focus:ring-offset-0"
         disabled={disabled}
       />
       <Button
         type="submit"
         size="icon"
-        disabled={!content.trim() || disabled}
-        className="absolute bottom-2 right-2"
+        disabled={disabled || !input.trim()}
+        className="absolute bottom-3 right-3 h-8 w-8 bg-zinc-600 hover:bg-zinc-700"
       >
-        <SendHorizontal className="size-4" />
+        <SendIcon className="h-4 w-4" />
+        <span className="sr-only">Send message</span>
       </Button>
     </form>
   );
-};
+}

@@ -1,58 +1,50 @@
-import { cn } from "@/lib/utils";
+import { Message } from '@/types/chat';
+import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
-import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 import { ComponentPropsWithoutRef } from 'react';
-import { Message } from "@/types/chat";
 
-interface ChatMessageProps {
+interface ChatMessageProps extends ComponentPropsWithoutRef<'div'> {
   message: Message;
 }
 
-type MarkdownComponentProps = {
-  node?: any;
-  inline?: boolean;
-  className?: string;
-  children?: React.ReactNode;
-} & ComponentPropsWithoutRef<any>;
-
-export const ChatMessage = ({ message }: ChatMessageProps) => {
-  const isUser = message.role === 'user';
+export function ChatMessage({ message, className, ...props }: ChatMessageProps) {
+  const isAssistant = message.role === 'assistant';
 
   return (
     <div
       className={cn(
-        "flex w-full gap-4 p-4 rounded-lg",
-        isUser ? "bg-muted/50" : "bg-background"
+        'group relative flex gap-3 py-3',
+        isAssistant && 'bg-zinc-800/40',
+        className
       )}
+      {...props}
     >
-      <div className="flex-1 space-y-2">
-        <div className="text-sm font-medium">
-          {isUser ? "You" : "Assistant"}
+      <div className="flex-1 space-y-2 overflow-hidden px-1">
+        <div className="min-h-[20px] text-sm">
+          <div className="prose prose-invert max-w-none">
+            <ReactMarkdown
+              rehypePlugins={[rehypeRaw]}
+              components={{
+                pre: ({ node, ...props }) => (
+                  <div className="relative my-2">
+                    <pre className="overflow-x-auto rounded-lg bg-zinc-800 p-4" {...props} />
+                  </div>
+                ),
+                code: ({ node, inline, ...props }) =>
+                  inline ? (
+                    <code className="rounded-md bg-zinc-800 px-1.5 py-0.5 text-sm" {...props} />
+                  ) : (
+                    <code {...props} />
+                  ),
+                p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
         </div>
-        <ReactMarkdown
-          className="prose dark:prose-invert max-w-none"
-          rehypePlugins={[rehypeHighlight, rehypeRaw]}
-          components={{
-            pre: ({ node, ...props }: MarkdownComponentProps) => (
-              <pre {...props} className="relative rounded-lg p-4" />
-            ),
-            code: ({ node, inline, className, children, ...props }: MarkdownComponentProps) => (
-              <code
-                className={cn(
-                  "relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm",
-                  className
-                )}
-                {...props}
-              >
-                {children}
-              </code>
-            ),
-          }}
-        >
-          {message.content}
-        </ReactMarkdown>
       </div>
     </div>
   );
-};
+}
