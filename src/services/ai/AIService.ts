@@ -31,7 +31,12 @@ export class AIService {
   private systemPrompt: string;
   private readonly maxContextTokens: number;
 
-  constructor(systemPrompt: string = 'You are a helpful AI assistant.') {
+  constructor(systemPrompt: string = `You are a helpful AI assistant. Please follow these guidelines:
+1. Use complete, well-formed sentences
+2. When using numbered lists, ensure proper formatting (1., 2., etc.)
+3. Avoid abbreviations unless explicitly requested
+4. Double-check sentence structure before responding
+5. Use proper punctuation and spacing`) {
     // Log all environment variables (without their values)
     logger.debug('Environment variables check:', { 
       hasOpenAIKey: !!import.meta.env.VITE_OPENAI_API_KEY,
@@ -235,10 +240,11 @@ export class AIService {
       logger.debug('Creating streaming conversation chain');
       const chain = RunnableSequence.from([
         this.prompt,
-        this.streamingModel, // Use streaming model
+        this.streamingModel,
         new StringOutputParser(),
       ]);
 
+      let buffer = '';
       const stream = await chain.stream({
         input: currentMessage,
         history: history,
@@ -246,8 +252,29 @@ export class AIService {
 
       try {
         for await (const chunk of stream) {
-          callbacks.onToken(chunk);
+          // Add chunk to buffer
+          buffer += chunk;
+          
+          // Look for natural break points (end of sentences, end of lines)
+          const breakMatch = buffer.match(/([.!?]\s+|[\n]\s*)/);
+          
+          if (breakMatch) {
+            const breakPoint = breakMatch.index! + breakMatch[0].length;
+            const completeText = buffer.slice(0, breakPoint);
+            
+            if (completeText.trim()) {
+              callbacks.onToken(completeText);
+            }
+            
+            buffer = buffer.slice(breakPoint);
+          }
         }
+        
+        // Send any remaining text in the buffer
+        if (buffer.trim()) {
+          callbacks.onToken(buffer);
+        }
+        
         callbacks.onComplete?.();
       } catch (error) {
         logger.error('Error in stream processing:', error);
