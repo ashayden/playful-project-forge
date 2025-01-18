@@ -12,23 +12,6 @@ export function useConversations() {
     queryKey: [CONVERSATIONS_KEY],
     queryFn: async () => {
       logger.debug('Fetching conversations');
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        logger.error('Error fetching conversations:', error);
-        throw error;
-      }
-
-      return data as Conversation[];
-    },
-  });
-
-  const createConversation = useMutation({
-    mutationFn: async (title: string) => {
-      logger.debug('Creating new conversation:', title);
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user?.id) {
@@ -37,10 +20,41 @@ export function useConversations() {
 
       const { data, error } = await supabase
         .from('conversations')
-        .insert([{ 
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        logger.error('Error fetching conversations:', error);
+        throw error;
+      }
+
+      return (data || []) as Conversation[];
+    },
+    refetchInterval: 60000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    staleTime: 30000,
+    gcTime: 10 * 60 * 1000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+  });
+
+  const createConversation = useMutation({
+    mutationFn: async (title: string) => {
+      logger.debug('Creating conversation:', title);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
+
+      const { data, error } = await supabase
+        .from('conversations')
+        .insert([{
           title,
           user_id: user.id,
-          model: 'gpt-4o-mini' // updated model
+          model: 'gpt-4o-mini'
         }])
         .select()
         .single();
@@ -53,9 +67,10 @@ export function useConversations() {
       return data as Conversation;
     },
     onSuccess: (newConversation) => {
-      queryClient.setQueryData<Conversation[]>([CONVERSATIONS_KEY], (old = []) => 
-        [newConversation, ...old]
-      );
+      queryClient.setQueryData<Conversation[]>([CONVERSATIONS_KEY], old => {
+        const conversations = [...(old || [])];
+        return [newConversation, ...conversations];
+      });
     },
   });
 

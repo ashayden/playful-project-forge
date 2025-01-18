@@ -28,6 +28,13 @@ export function useMessages(conversationId: string) {
       return (data || []) as Message[];
     },
     enabled: !!conversationId,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    staleTime: 10000,
+    gcTime: 5 * 60 * 1000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   const sendMessage = useMutation({
@@ -115,24 +122,13 @@ export function useMessages(conversationId: string) {
         created_at: new Date().toISOString(),
       };
 
-      // Create optimistic assistant message
-      const optimisticAssistantMessage: Message = {
-        id: `temp-${Date.now()}-assistant`,
-        role: 'assistant',
-        content: 'Thinking...',
-        conversation_id: conversationId,
-        user_id: null,
-        created_at: new Date().toISOString(),
-      };
-
       // Optimistically update the messages
       queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => [
         ...(old || []),
         optimisticUserMessage,
-        optimisticAssistantMessage,
       ]);
 
-      return { previousMessages, optimisticUserMessage, optimisticAssistantMessage };
+      return { previousMessages, optimisticUserMessage };
     },
     onError: (err, _variables, context) => {
       logger.error('Error in message mutation:', err);
@@ -144,10 +140,9 @@ export function useMessages(conversationId: string) {
     onSuccess: (data, _variables, context) => {
       queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
         const messages = [...(old || [])];
-        // Remove optimistic messages
+        // Remove optimistic message
         const filteredMessages = messages.filter(
-          msg => msg.id !== context?.optimisticUserMessage.id && 
-                 msg.id !== context?.optimisticAssistantMessage.id
+          msg => msg.id !== context?.optimisticUserMessage.id
         );
         // Add real messages
         const newMessages = [...filteredMessages];
@@ -159,6 +154,8 @@ export function useMessages(conversationId: string) {
         }
         return newMessages;
       });
+      // Invalidate and refetch after successful mutation
+      queryClient.invalidateQueries({ queryKey: [MESSAGES_KEY, conversationId] });
     },
   });
 
