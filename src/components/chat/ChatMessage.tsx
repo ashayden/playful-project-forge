@@ -148,7 +148,7 @@ export function ChatMessage({
 
       {/* Message Content */}
       <div className="flex-1 min-w-0">
-        <div className="prose prose-invert max-w-none">
+        <div className="prose prose-invert prose-zinc max-w-none text-zinc-100">
           <ReactMarkdown
             rehypePlugins={[rehypeRaw]}
             components={markdownComponents}
