@@ -15,13 +15,21 @@ import {
 import { aiConfig, modelConfig } from '@/config/ai.config';
 import { logger } from '@/services/loggingService';
 
+export type StreamCallbacks = {
+  onToken: (token: string) => void;
+  onComplete?: () => void;
+  onError?: (error: Error) => void;
+};
+
 /**
  * Service class for handling AI interactions using Langchain
  */
 export class AIService {
-  private model: ChatOpenAI;
+  private streamingModel: ChatOpenAI;
+  private nonStreamingModel: ChatOpenAI;
   private prompt: ChatPromptTemplate;
   private systemPrompt: string;
+  private readonly maxContextTokens: number;
 
   constructor(systemPrompt: string = 'You are a helpful AI assistant.') {
     // Log all environment variables (without their values)
@@ -35,7 +43,9 @@ export class AIService {
       modelName: modelConfig.modelName,
       hasApiKey: !!aiConfig.openAIApiKey,
       systemPrompt,
-      environment: import.meta.env.MODE
+      environment: import.meta.env.MODE,
+      maxTokens: modelConfig.maxTokens,
+      contextWindow: modelConfig.contextWindow
     });
 
     if (!import.meta.env.VITE_OPENAI_API_KEY) {
@@ -51,12 +61,25 @@ export class AIService {
     }
 
     try {
-      // Initialize the OpenAI model with fixed configuration
-      this.model = new ChatOpenAI({
+      this.maxContextTokens = modelConfig.contextWindow;
+      
+      // Initialize streaming model
+      this.streamingModel = new ChatOpenAI({
         modelName: modelConfig.modelName,
         temperature: modelConfig.temperature,
         maxTokens: modelConfig.maxTokens,
         openAIApiKey: aiConfig.openAIApiKey,
+        streaming: true,
+        maxConcurrency: 1, // Ensure sequential processing
+      });
+
+      // Initialize non-streaming model
+      this.nonStreamingModel = new ChatOpenAI({
+        modelName: modelConfig.modelName,
+        temperature: modelConfig.temperature,
+        maxTokens: modelConfig.maxTokens,
+        openAIApiKey: aiConfig.openAIApiKey,
+        streaming: false,
       });
 
       this.systemPrompt = systemPrompt;
@@ -98,26 +121,61 @@ export class AIService {
     }
   }
 
+  private truncateHistory(messages: Array<{ role: string; content: string }>, maxTokens: number): Array<{ role: string; content: string }> {
+    // Simple token estimation: 4 chars ~= 1 token
+    const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+    
+    let totalTokens = estimateTokens(this.systemPrompt);
+    const result = [];
+    
+    // Process messages from most recent to oldest
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      const msgTokens = estimateTokens(msg.content);
+      
+      if (totalTokens + msgTokens <= maxTokens) {
+        result.unshift(msg); // Add to start of array to maintain order
+        totalTokens += msgTokens;
+      } else {
+        break;
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * Process a message and return a non-streaming response
+   * @param messages - Array of messages in the conversation
+   * @returns Promise containing the AI's response
+   */
   async processMessage(messages: Array<{ role: string; content: string }>): Promise<string> {
     try {
       if (!messages || messages.length === 0) {
         throw new Error('No messages provided');
       }
 
+      // Calculate available context space (leaving room for response)
+      const availableContext = this.maxContextTokens - modelConfig.maxTokens;
+      
+      // Truncate history if needed
+      const truncatedMessages = this.truncateHistory(messages, availableContext);
+      
       logger.debug('Processing message with history:', { 
-        messageCount: messages.length,
-        lastMessage: messages[messages.length - 1]?.content,
-        roles: messages.map(m => m.role)
+        originalMessageCount: messages.length,
+        truncatedMessageCount: truncatedMessages.length,
+        lastMessage: truncatedMessages[truncatedMessages.length - 1]?.content,
+        roles: truncatedMessages.map(m => m.role)
       });
 
       // Convert messages to Langchain format
-      const history = messages.slice(0, -1).map(msg => this.convertToLangchainMessage(msg));
-      const currentMessage = messages[messages.length - 1].content;
+      const history = truncatedMessages.slice(0, -1).map(msg => this.convertToLangchainMessage(msg));
+      const currentMessage = truncatedMessages[truncatedMessages.length - 1].content;
 
       logger.debug('Creating conversation chain');
       const chain = RunnableSequence.from([
         this.prompt,
-        this.model,
+        this.nonStreamingModel, // Use non-streaming model
         new StringOutputParser(),
       ]);
 
@@ -145,6 +203,59 @@ export class AIService {
     } catch (error) {
       logger.error('Error processing message:', error);
       throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async processMessageStream(
+    messages: Array<{ role: string; content: string }>,
+    callbacks: StreamCallbacks
+  ): Promise<void> {
+    try {
+      if (!messages || messages.length === 0) {
+        throw new Error('No messages provided');
+      }
+
+      // Calculate available context space (leaving room for response)
+      const availableContext = this.maxContextTokens - modelConfig.maxTokens;
+      
+      // Truncate history if needed
+      const truncatedMessages = this.truncateHistory(messages, availableContext);
+      
+      logger.debug('Processing streaming message with history:', { 
+        originalMessageCount: messages.length,
+        truncatedMessageCount: truncatedMessages.length,
+        lastMessage: truncatedMessages[truncatedMessages.length - 1]?.content,
+        roles: truncatedMessages.map(m => m.role)
+      });
+
+      // Convert messages to Langchain format
+      const history = truncatedMessages.slice(0, -1).map(msg => this.convertToLangchainMessage(msg));
+      const currentMessage = truncatedMessages[truncatedMessages.length - 1].content;
+
+      logger.debug('Creating streaming conversation chain');
+      const chain = RunnableSequence.from([
+        this.prompt,
+        this.streamingModel, // Use streaming model
+        new StringOutputParser(),
+      ]);
+
+      const stream = await chain.stream({
+        input: currentMessage,
+        history: history,
+      });
+
+      try {
+        for await (const chunk of stream) {
+          callbacks.onToken(chunk);
+        }
+        callbacks.onComplete?.();
+      } catch (error) {
+        logger.error('Error in stream processing:', error);
+        callbacks.onError?.(error instanceof Error ? error : new Error('Unknown streaming error'));
+      }
+    } catch (error) {
+      logger.error('Error processing streaming message:', error);
+      callbacks.onError?.(error instanceof Error ? error : new Error('Failed to process streaming message'));
     }
   }
 

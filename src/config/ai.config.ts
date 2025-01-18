@@ -2,14 +2,16 @@
  * AI Model Configuration
  * Defines the core settings for the AI model used in the application
  * 
- * @property modelName - The specific model to use (gpt-4o-mini)
+ * @property modelName - The specific model to use (gpt-4o-mini-2024-07-18)
  * @property temperature - Controls randomness in responses (0.0 to 1.0)
- * @property maxTokens - Maximum length of generated responses
+ * @property maxTokens - Maximum length of generated responses (16k limit)
+ * @property contextWindow - Maximum context window size (128k tokens)
  */
 export const modelConfig = {
-  modelName: 'gpt-4',
+  modelName: 'gpt-4o-mini-2024-07-18',
   temperature: 0.7,
-  maxTokens: 1000,
+  maxTokens: 8192,
+  contextWindow: 128000,
 } as const;
 
 /**
