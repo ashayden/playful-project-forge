@@ -12,124 +12,72 @@ export function useMessages(conversationId: string) {
   const queryClient = useQueryClient();
   const chatService = new ChatService();
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const [channel, setChannel] = useState<RealtimeChannel | null>(null);
 
-  // Add realtime subscription
-  useEffect(() => {
-    let channel: RealtimeChannel;
-    let retryCount = 0;
-    const maxRetries = 3;
+  // Add subscription management
+  const setupRealtimeSubscription = () => {
+    if (channel) {
+      channel.unsubscribe();
+    }
 
-    async function setupChannel() {
-      try {
-        if (channel) {
-          await channel.unsubscribe();
-        }
-
-        channel = supabase
-          .channel(`messages:${conversationId}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'messages',
-              filter: `conversation_id=eq.${conversationId}`
-            },
-            (payload) => {
-              logger.debug('Realtime message update:', payload);
-              
-              // Handle message updates
-              if (payload.eventType === 'UPDATE') {
-                queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
-                  if (!old) return old;
-                  const updated = old.map(msg => 
-                    msg.id === payload.new.id 
-                      ? { ...msg, ...payload.new }
-                      : msg
-                  );
-                  logger.debug('Updated messages in cache:', {
-                    oldCount: old.length,
-                    newCount: updated.length,
-                    updatedId: payload.new.id
-                  });
-                  return updated;
-                });
-
-                // Update streaming state if needed
-                if (payload.new.id === streamingMessageId) {
-                  if (payload.new.is_streaming === false) {
-                    logger.debug('Clearing streaming state for message:', streamingMessageId);
-                    setStreamingMessageId(null);
-                  }
-                }
-              }
-              
-              // Handle new messages
-              if (payload.eventType === 'INSERT') {
-                queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
-                  if (!old) return [payload.new as Message];
-                  
-                  // Find any temporary message to replace
-                  const tempIndex = old.findIndex(msg => 
-                    msg.id?.startsWith('temp-') && 
-                    msg.role === payload.new.role &&
-                    msg.content === payload.new.content
-                  );
-                  
-                  if (tempIndex >= 0) {
-                    // Replace temporary message
-                    const newMessages = [...old];
-                    newMessages[tempIndex] = payload.new as Message;
-                    logger.debug('Replaced temp message:', {
-                      tempId: old[tempIndex].id,
-                      newId: payload.new.id
-                    });
-                    return newMessages;
-                  } else {
-                    // Add new message
-                    logger.debug('Added new message:', payload.new.id);
-                    return [...old, payload.new as Message];
-                  }
-                });
-              }
-            }
-          )
-          .subscribe(async (status) => {
-            logger.debug('Realtime subscription status:', status);
+    // Create new subscription
+    const newChannel = supabase
+      .channel(`messages:${conversationId}`)
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`
+        },
+        async (payload) => {
+          logger.debug('Realtime message update:', payload);
+          
+          // Handle message updates
+          const updatedMessage = payload.new as Message;
+          queryClient.setQueryData<Message[]>(['messages', conversationId], (old) => {
+            if (!old) return [updatedMessage];
             
-            if (status === 'SUBSCRIBED') {
-              retryCount = 0;
-            } else if (status === 'CHANNEL_ERROR' && retryCount < maxRetries) {
-              retryCount++;
-              logger.warn(`Retrying subscription (attempt ${retryCount}/${maxRetries})`);
-              await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-              await setupChannel();
-            } else if (status === 'CHANNEL_ERROR') {
-              logger.error('Failed to establish realtime connection after retries');
+            // Find and update the message
+            const index = old.findIndex(msg => msg.id === updatedMessage.id);
+            if (index === -1) {
+              return [...old, updatedMessage];
             }
+            
+            const updated = [...old];
+            updated[index] = updatedMessage;
+            return updated;
           });
-      } catch (error) {
-        logger.error('Error setting up realtime subscription:', error);
-        if (retryCount < maxRetries) {
-          retryCount++;
-          logger.warn(`Retrying subscription (attempt ${retryCount}/${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-          await setupChannel();
         }
-      }
-    }
+      )
+      .subscribe((status) => {
+        logger.debug('Realtime subscription status:', status);
+        
+        if (status === 'SUBSCRIBED') {
+          logger.info('Successfully subscribed to message updates');
+        }
+        
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          logger.warn('Realtime subscription closed or errored, attempting to reconnect...');
+          setTimeout(setupRealtimeSubscription, 1000); // Retry after 1 second
+        }
+      });
 
-    if (conversationId) {
-      setupChannel();
-    }
+    setChannel(newChannel);
+  };
 
+  // Set up subscription when conversation ID changes
+  useEffect(() => {
+    if (!conversationId) return;
+    
+    setupRealtimeSubscription();
+    
     return () => {
       if (channel) {
-        logger.debug('Unsubscribing from realtime updates');
         channel.unsubscribe();
       }
     };
-  }, [conversationId, queryClient, streamingMessageId]);
+  }, [conversationId]);
 
   const { data: messages = [], isLoading, error } = useQuery({
     queryKey: [MESSAGES_KEY, conversationId],
