@@ -1,101 +1,57 @@
-import { useAuth } from "@/components/AuthProvider";
-import { Button } from "@/components/ui/button";
-import { ChatMessage } from "@/components/chat/ChatMessage";
-import { ChatInput } from "@/components/chat/ChatInput";
-import { ModelSelector } from "@/components/chat/ModelSelector";
-import { useEffect } from "react";
-import { useChat } from "@/contexts/ChatContext";
-import { useToast } from "@/hooks/use-toast";
-import { logger } from "@/services/loggingService";
+import { useEffect } from 'react';
+import { useChat } from '@/contexts/ChatContext';
+import { ChatInput } from '@/components/chat/ChatInput';
+import { ChatMessage } from '@/components/chat/ChatMessage';
+import { ModelSelector } from '@/components/chat/ModelSelector';
+import { LoadingState } from '@/components/LoadingSpinner';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { withAuth } from '@/components/withAuth';
+import { logger } from '@/services/loggingService';
 
-const ChatInterface = () => {
-  logger.debug('ChatInterface initializing...');
-  
-  const { user, signOut } = useAuth();
-  const { 
-    currentConversation,
+function ChatInterface() {
+  const {
+    messages,
     isLoading,
     error,
-    createConversation,
-    messages,
     sendMessage,
     isSending,
-    setCurrentConversation,
     conversations,
+    createConversation,
+    currentConversation,
+    setCurrentConversation
   } = useChat();
-  const { toast } = useToast();
 
   useEffect(() => {
-    const initializeChat = () => {
-      logger.debug('Initializing chat...', { userId: user?.id });
-      try {
-        // Create initial conversation if none exists
-        if (!currentConversation && !isLoading) {
-          logger.debug('No current conversation, creating new one...');
-          createConversation('New Chat');
-        }
-      } catch (error) {
-        logger.error('Failed to initialize chat:', error);
-        toast({
-          title: "Error",
-          description: "Failed to initialize chat",
-          variant: "destructive",
-        });
-      }
-    };
-
-    if (user) {
-      logger.debug('User authenticated, initializing chat...', { userId: user.id });
-      initializeChat();
-    } else {
-      logger.debug('No user authenticated');
+    if (!currentConversation && conversations?.length === 0) {
+      logger.debug('No conversation found, creating new one');
+      createConversation('New Chat');
     }
-  }, [user, currentConversation, isLoading, createConversation]);
-
-  // Set current conversation when a new one is created
-  useEffect(() => {
-    if (conversations.length > 0 && !currentConversation) {
-      logger.debug('Setting current conversation to latest:', conversations[0]);
-      setCurrentConversation(conversations[0]);
-    }
-  }, [conversations, currentConversation, setCurrentConversation]);
+  }, [currentConversation, conversations, createConversation]);
 
   if (error) {
-    toast({
-      title: "Error",
-      description: error.message,
-      variant: "destructive",
-    });
+    throw error;
+  }
+
+  if (isLoading) {
+    return <LoadingState message="Loading chat..." />;
   }
 
   return (
     <div className="flex flex-col h-screen">
-      <header className="flex justify-between items-center p-4 border-b">
+      <header className="border-b p-4 flex justify-between items-center">
+        <h1 className="text-xl font-semibold">Chat</h1>
         <ModelSelector />
-        <Button onClick={() => signOut()}>Sign Out</Button>
       </header>
 
       <main className="flex-1 overflow-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <ChatMessage key={message.id} message={message} />
-        ))}
-        {isSending && (
-          <div className="animate-pulse">
-            <ChatMessage
-              message={{
-                id: 'loading',
-                role: 'assistant',
-                content: 'Thinking...',
-                conversation_id: currentConversation?.id ?? '',
-                user_id: null,
-                created_at: new Date().toISOString(),
-              }}
-            />
-          </div>
-        )}
+        <ErrorBoundary>
+          {messages?.map((message) => (
+            <ChatMessage key={message.id} message={message} />
+          ))}
+        </ErrorBoundary>
       </main>
 
-      <footer className="p-4 border-t">
+      <footer className="border-t p-4">
         <ChatInput
           onSend={sendMessage}
           disabled={isSending || !currentConversation}
@@ -103,6 +59,6 @@ const ChatInterface = () => {
       </footer>
     </div>
   );
-};
+}
 
-export default ChatInterface;
+export default withAuth(ChatInterface);
