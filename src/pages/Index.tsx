@@ -8,10 +8,12 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { withAuth } from '@/components/withAuth';
 import { logger } from '@/services/loggingService';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 function ChatInterface() {
   const { toast } = useToast();
   const [isInitializing, setIsInitializing] = useState(true);
+  const { session } = useAuth();
   const {
     messages = [],
     isLoading,
@@ -28,15 +30,17 @@ function ChatInterface() {
     let mounted = true;
 
     const initializeConversation = async () => {
+      // Only proceed if we have a valid session
+      if (!session) {
+        logger.debug('Waiting for session to be available');
+        return;
+      }
+
       try {
         if (!currentConversation) {
           if (conversations.length === 0) {
             logger.debug('No conversation found, creating new one');
             await createConversation('New Chat');
-            // Wait for conversations to update through React Query
-            if (mounted && conversations.length > 0) {
-              setCurrentConversation(conversations[0]);
-            }
           } else {
             logger.debug('Setting current conversation to latest:', conversations[0]);
             setCurrentConversation(conversations[0]);
@@ -63,7 +67,7 @@ function ChatInterface() {
     return () => {
       mounted = false;
     };
-  }, [currentConversation, conversations, createConversation, setCurrentConversation, toast]);
+  }, [session, currentConversation, conversations, createConversation, setCurrentConversation, toast]);
 
   if (error) {
     logger.error('Chat interface error:', error);
