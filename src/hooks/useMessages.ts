@@ -134,14 +134,14 @@ export function useMessages(conversationId: string) {
 
       return { previousMessages, optimisticUserMessage, optimisticAssistantMessage };
     },
-    onError: (err, variables, context) => {
+    onError: (err, _variables, context) => {
       logger.error('Error in message mutation:', err);
       // Revert back to the previous state if there's an error
       if (context?.previousMessages) {
         queryClient.setQueryData([MESSAGES_KEY, conversationId], context.previousMessages);
       }
     },
-    onSuccess: (data, variables, context) => {
+    onSuccess: (data, _variables, context) => {
       queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
         const messages = [...(old || [])];
         // Remove optimistic messages
