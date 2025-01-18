@@ -8,6 +8,10 @@ interface ChatMessageProps extends ComponentPropsWithoutRef<'div'> {
   message: Message;
 }
 
+interface CodeProps extends ComponentPropsWithoutRef<'code'> {
+  inline?: boolean;
+}
+
 export function ChatMessage({ message, className, ...props }: ChatMessageProps) {
   const isAssistant = message.role === 'assistant';
 
@@ -31,7 +35,7 @@ export function ChatMessage({ message, className, ...props }: ChatMessageProps) 
                     <pre className="overflow-x-auto rounded-lg bg-zinc-800 p-4" {...props} />
                   </div>
                 ),
-                code: ({ node, inline, ...props }) =>
+                code: ({ inline, ...props }: CodeProps) =>
                   inline ? (
                     <code className="rounded-md bg-zinc-800 px-1.5 py-0.5 text-sm" {...props} />
                   ) : (
