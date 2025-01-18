@@ -1,80 +1,41 @@
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils';
+import { ComponentPropsWithoutRef } from 'react';
 
-/**
- * Props for the TypingIndicator component
- */
-interface TypingIndicatorProps {
-  /** Optional CSS classes to apply to the component */
-  className?: string;
-  /** Whether the component is in streaming state */
+interface TypingIndicatorProps extends ComponentPropsWithoutRef<'div'> {
   isStreaming?: boolean;
 }
 
-/**
- * A component that displays an animated typing indicator with three dots
- * 
- * @component
- * @example
- * ```tsx
- * <TypingIndicator 
- *   isStreaming={true} 
- *   className="bg-zinc-800" 
- * />
- * ```
- */
 export function TypingIndicator({ 
-  className, 
-  isStreaming = false 
+  isStreaming = false,
+  className,
+  ...props 
 }: TypingIndicatorProps) {
-  // Animation delays for each dot
-  const DELAYS = {
-    FIRST: '-0.3s',
-    SECOND: '-0.15s',
-    THIRD: '0s'
-  };
-
-  // Base styles for the dots
-  const dotBaseStyles = cn(
-    "h-2 w-2 rounded-full",
-    "transition-all duration-300",
-    isStreaming ? "bg-primary" : "bg-zinc-400"
-  );
-
   return (
     <div 
       role="status"
-      aria-label="Loading"
+      aria-label="AI is typing"
       className={cn(
-        // Layout and spacing
-        "flex items-center space-x-1.5",
-        "px-2.5 py-2",
-        // Transitions
-        "transition-all duration-300",
-        // Conditional streaming styles
-        isStreaming && "bg-primary/10",
+        "flex items-center space-x-1",
+        isStreaming && "scale-100",
+        !isStreaming && "scale-0",
+        "transition-transform duration-200",
         className
       )}
+      {...props}
     >
-      {/* First Dot */}
-      <div className={cn(
-        dotBaseStyles,
-        "animate-bounce",
-        `[animation-delay:${DELAYS.FIRST}]`
-      )} />
-      
-      {/* Second Dot */}
-      <div className={cn(
-        dotBaseStyles,
-        "animate-bounce",
-        `[animation-delay:${DELAYS.SECOND}]`
-      )} />
-      
-      {/* Third Dot */}
-      <div className={cn(
-        dotBaseStyles,
-        "animate-bounce",
-        `[animation-delay:${DELAYS.THIRD}]`
-      )} />
+      {[...Array(3)].map((_, i) => (
+        <div
+          key={i}
+          className={cn(
+            "h-1.5 w-1.5 rounded-full bg-blue-500",
+            "animate-bounce",
+            // Stagger the animation
+            i === 0 && "animation-delay-0",
+            i === 1 && "animation-delay-[200ms]",
+            i === 2 && "animation-delay-[400ms]"
+          )}
+        />
+      ))}
     </div>
   );
 } 

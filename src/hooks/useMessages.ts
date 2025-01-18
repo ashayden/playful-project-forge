@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Message } from '@/types/messages';
+import { Message, MessageSeverity } from '@/types/messages';
 import { logger } from '@/services/loggingService';
 import { ChatService } from '@/services/ai/ChatService';
 import { useState, useEffect } from 'react';
@@ -35,13 +35,11 @@ export function useMessages(conversationId: string) {
             if (payload.eventType === 'UPDATE') {
               queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
                 if (!old) return old;
-                const updatedMessages = old.map(msg => 
+                return old.map(msg => 
                   msg.id === payload.new.id 
                     ? { ...msg, ...payload.new }
                     : msg
                 );
-                // Remove any optimistic messages for this conversation
-                return updatedMessages.filter(msg => !msg.id?.startsWith('temp-'));
               });
 
               // Update streaming state if needed
@@ -54,13 +52,22 @@ export function useMessages(conversationId: string) {
             if (payload.eventType === 'INSERT') {
               queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
                 if (!old) return [payload.new as Message];
-                // Remove any optimistic messages and add the new message
-                const messages = old.filter(msg => !msg.id?.startsWith('temp-'));
-                const exists = messages.some(msg => msg.id === payload.new.id);
-                if (!exists) {
-                  return [...messages, payload.new as Message];
+                // Find any temporary message to replace
+                const tempIndex = old.findIndex(msg => 
+                  msg.id?.startsWith('temp-') && 
+                  msg.role === payload.new.role &&
+                  msg.content === payload.new.content
+                );
+                
+                if (tempIndex >= 0) {
+                  // Replace temporary message
+                  const newMessages = [...old];
+                  newMessages[tempIndex] = payload.new as Message;
+                  return newMessages;
+                } else {
+                  // Add new message
+                  return [...old, payload.new as Message];
                 }
-                return messages;
               });
             }
           }
@@ -98,8 +105,8 @@ export function useMessages(conversationId: string) {
     enabled: !!conversationId,
     staleTime: 10000,
     gcTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false, // Disable automatic refetch
-    refetchOnReconnect: false, // Rely on realtime updates instead
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const sendMessage = useMutation({
@@ -111,198 +118,209 @@ export function useMessages(conversationId: string) {
         throw new Error('User not authenticated');
       }
 
-      // Create the user message in the database
-      const { data: message, error: createError } = await supabase
-        .from('messages')
-        .insert([{
-          content,
-          role,
-          conversation_id: conversationId,
-          user_id: user.id,
-          is_streaming: false
-        }])
-        .select()
-        .single();
-
-      if (createError) {
-        logger.error('Error creating message:', createError);
-        throw createError;
-      }
-
-      const userMessage = message as Message;
-
-      // If it's a user message, get the AI response
-      if (role === 'user') {
-        try {
-          // Create a placeholder assistant message with streaming status
-          const { data: assistantMessage, error: assistantError } = await supabase
-            .from('messages')
-            .insert([{
-              content: '',
-              role: 'assistant' as const,
-              conversation_id: conversationId,
-              user_id: user.id,
-              is_streaming: true
-            }])
-            .select()
-            .single();
-
-          if (assistantError) {
-            logger.error('Error creating assistant message:', assistantError);
-            throw assistantError;
-          }
-
-          if (!assistantMessage) {
-            throw new Error('Failed to create assistant message');
-          }
-
-          const streamingMessage = assistantMessage as Message & { id: string };
-          let streamedContent = '';
-          let batchTimeout: NodeJS.Timeout | null = null;
-          let pendingContent = '';
-          
-          // Set streaming state
-          setStreamingMessageId(streamingMessage.id);
-
-          // Process the message with streaming
-          await chatService.processMessageStream(messages, {
-            onToken: async (token: string) => {
-              pendingContent += token;
-              
-              // Batch updates to reduce database writes
-              if (!batchTimeout) {
-                batchTimeout = setTimeout(async () => {
-                  if (pendingContent) {
-                    streamedContent += pendingContent;
-                    
-                    // Update the message content in the database
-                    const { error: updateError } = await supabase
-                      .from('messages')
-                      .update({ 
-                        content: streamedContent,
-                        is_streaming: true,
-                        updated_at: new Date().toISOString()
-                      })
-                      .eq('id', streamingMessage.id);
-
-                    if (updateError) {
-                      logger.error('Error updating streaming message:', updateError);
-                      throw updateError;
-                    }
-
-                    pendingContent = '';
-                  }
-                  batchTimeout = null;
-                }, 100); // Batch updates every 100ms
-              }
-            },
-            onComplete: async () => {
-              // Clear any pending timeout
-              if (batchTimeout) {
-                clearTimeout(batchTimeout);
-                batchTimeout = null;
-              }
-
-              // Final update with complete content
-              const finalContent = streamedContent + pendingContent;
-              const { error: finalUpdateError } = await supabase
-                .from('messages')
-                .update({ 
-                  content: finalContent,
-                  is_streaming: false,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', streamingMessage.id);
-
-              if (finalUpdateError) {
-                logger.error('Error finalizing streaming message:', finalUpdateError);
-                throw finalUpdateError;
-              }
-
-              // Clear streaming state
-              setStreamingMessageId(null);
-            },
-            onError: (error) => {
-              // Clear streaming state and timeout on error
-              setStreamingMessageId(null);
-              if (batchTimeout) {
-                clearTimeout(batchTimeout);
-                batchTimeout = null;
-              }
-              logger.error('Error in streaming:', error);
-              throw error;
-            }
-          });
-
-          return {
-            userMessage,
-            assistantMessage: { ...streamingMessage, content: streamedContent }
-          };
-        } catch (error) {
-          // Clear streaming state on error
-          setStreamingMessageId(null);
-          logger.error('Error processing message with AI:', error);
-          throw error;
-        }
-      }
-
-      return { userMessage };
-    },
-    onMutate: async ({ content }) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: [MESSAGES_KEY, conversationId] });
-
-      // Snapshot the previous value
-      const previousMessages = queryClient.getQueryData<Message[]>([MESSAGES_KEY, conversationId]);
-
       // Create optimistic user message
-      const optimisticUserMessage: Message = {
-        id: `temp-${Date.now()}`,
-        role: 'user',
+      const tempId = `temp-${Date.now()}`;
+      const optimisticMessage: Message = {
+        id: tempId,
         content,
+        role,
         conversation_id: conversationId,
-        user_id: (await supabase.auth.getUser()).data.user?.id ?? null,
+        user_id: user.id,
         created_at: new Date().toISOString(),
         is_streaming: false
       };
 
-      // Optimistically update the messages
+      // Add optimistic message to cache
       queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
-        const messages = [...(old || [])];
-        // Remove any existing optimistic messages
-        const filteredMessages = messages.filter(msg => msg.id && !msg.id.startsWith('temp-'));
-        return [...filteredMessages, optimisticUserMessage];
+        return old ? [...old, optimisticMessage] : [optimisticMessage];
       });
 
-      return { previousMessages, optimisticUserMessage };
-    },
-    onError: (err, _variables, context) => {
-      logger.error('Error in message mutation:', err);
-      // Revert back to the previous state if there's an error
-      if (context?.previousMessages) {
-        queryClient.setQueryData([MESSAGES_KEY, conversationId], context.previousMessages);
-      }
-    },
-    onSuccess: (data, _variables) => {
-      queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
-        if (!old) return old;
-        // Remove optimistic messages and add real ones
-        const messages = old.filter(msg => msg.id && !msg.id.startsWith('temp-'));
-        if (data.userMessage) {
-          messages.push(data.userMessage);
+      try {
+        // Create the user message in the database
+        const { data: message, error: createError } = await supabase
+          .from('messages')
+          .insert([{
+            content,
+            role,
+            conversation_id: conversationId,
+            user_id: user.id,
+            is_streaming: false
+          }])
+          .select()
+          .single();
+
+        if (createError) {
+          throw createError;
         }
-        return messages;
-      });
-    },
+
+        const userMessage = message as Message;
+
+        // If it's a user message, get the AI response
+        if (role === 'user') {
+          // Create optimistic AI message
+          const tempAiId = `temp-${Date.now()}-ai`;
+          const optimisticAiMessage: Message = {
+            id: tempAiId,
+            content: '',
+            role: 'assistant',
+            conversation_id: conversationId,
+            user_id: user.id,
+            created_at: new Date().toISOString(),
+            is_streaming: true
+          };
+
+          // Add optimistic AI message to cache
+          queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
+            return old ? [...old, optimisticAiMessage] : [optimisticAiMessage];
+          });
+
+          try {
+            // Create a placeholder assistant message
+            const { data: assistantMessage, error: assistantError } = await supabase
+              .from('messages')
+              .insert([{
+                content: '',
+                role: 'assistant',
+                conversation_id: conversationId,
+                user_id: user.id,
+                is_streaming: true
+              }])
+              .select()
+              .single();
+
+            if (assistantError) {
+              throw assistantError;
+            }
+
+            if (!assistantMessage) {
+              throw new Error('Failed to create assistant message');
+            }
+
+            const streamingMessage = assistantMessage as Message & { id: string };
+            let streamedContent = '';
+            let batchTimeout: NodeJS.Timeout | null = null;
+            let pendingContent = '';
+            
+            // Set streaming state
+            setStreamingMessageId(streamingMessage.id);
+
+            // Process the message with streaming
+            await chatService.processMessageStream(messages, {
+              onToken: async (token: string) => {
+                pendingContent += token;
+                
+                // Batch updates to reduce database writes
+                if (!batchTimeout) {
+                  batchTimeout = setTimeout(async () => {
+                    if (pendingContent) {
+                      streamedContent += pendingContent;
+                      
+                      // Update the message content in the database
+                      const { error: updateError } = await supabase
+                        .from('messages')
+                        .update({ 
+                          content: streamedContent,
+                          is_streaming: true,
+                          updated_at: new Date().toISOString()
+                        })
+                        .eq('id', streamingMessage.id);
+
+                      if (updateError) {
+                        throw updateError;
+                      }
+
+                      pendingContent = '';
+                    }
+                    batchTimeout = null;
+                  }, 100);
+                }
+              },
+              onComplete: async () => {
+                // Clear any pending timeout
+                if (batchTimeout) {
+                  clearTimeout(batchTimeout);
+                  batchTimeout = null;
+                }
+
+                // Final update with complete content
+                const finalContent = streamedContent + pendingContent;
+                const { error: finalUpdateError } = await supabase
+                  .from('messages')
+                  .update({ 
+                    content: finalContent,
+                    is_streaming: false,
+                    severity: 'success' as MessageSeverity,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', streamingMessage.id);
+
+                if (finalUpdateError) {
+                  throw finalUpdateError;
+                }
+
+                // Clear streaming state
+                setStreamingMessageId(null);
+              },
+              onError: async (error) => {
+                // Clear streaming state and timeout
+                setStreamingMessageId(null);
+                if (batchTimeout) {
+                  clearTimeout(batchTimeout);
+                  batchTimeout = null;
+                }
+
+                // Update message with error
+                const { error: updateError } = await supabase
+                  .from('messages')
+                  .update({ 
+                    content: 'An error occurred while generating the response. Please try again.',
+                    is_streaming: false,
+                    severity: 'error' as MessageSeverity,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', streamingMessage.id);
+
+                if (updateError) {
+                  logger.error('Error updating message with error state:', updateError);
+                }
+
+                throw error;
+              }
+            });
+
+            return {
+              userMessage,
+              assistantMessage: { ...streamingMessage, content: streamedContent }
+            };
+          } catch (error) {
+            // Clear streaming state
+            setStreamingMessageId(null);
+            logger.error('Error processing message with AI:', error);
+            throw error;
+          }
+        }
+
+        return { userMessage };
+      } catch (error) {
+        // Update optimistic message with error state
+        queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
+          if (!old) return old;
+          return old.map(msg => 
+            msg.id === tempId 
+              ? { ...msg, severity: 'error' as MessageSeverity }
+              : msg
+          );
+        });
+        throw error;
+      }
+    }
   });
 
   return {
     messages,
     isLoading,
     error,
-    sendMessage: sendMessage.mutate,
-    isSending: sendMessage.isPending,
-    streamingMessageId,
-    isStreaming: !!streamingMessageId,
+    sendMessage,
+    streamingMessageId
   };
 } 
