@@ -32,7 +32,7 @@ const queryClient = new QueryClient({
 
 export default function App() {
   return (
-    <div className="dark">
+    <div className="min-h-screen bg-background font-sans antialiased dark">
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>
