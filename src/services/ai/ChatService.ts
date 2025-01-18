@@ -38,31 +38,43 @@ export class ChatService {
     }
   ): Promise<void> {
     try {
-      logger.debug('Processing streaming chat message:', { messageCount: messages.length });
+      logger.debug('Processing streaming chat message:', { 
+        messageCount: messages?.length || 0,
+        messages: messages?.map(m => ({ role: m.role, contentLength: m.content?.length }))
+      });
 
       // Validate messages array
-      if (!Array.isArray(messages)) {
-        throw new Error('Messages must be an array');
-      }
-
-      // Ensure we have at least one message
-      if (messages.length === 0) {
-        throw new Error('No messages provided');
+      if (!messages || !Array.isArray(messages)) {
+        const error = new Error('Invalid messages array provided');
+        logger.error('Error in chat service:', error);
+        throw error;
       }
 
       // Format messages for the AI service, filtering out any invalid messages
       const formattedMessages = messages
-        .filter(msg => msg && msg.role && typeof msg.content === 'string')
+        .filter(msg => {
+          const isValid = msg && msg.role && typeof msg.content === 'string';
+          if (!isValid) {
+            logger.warn('Filtering out invalid message:', msg);
+          }
+          return isValid;
+        })
         .map(msg => ({
           role: msg.role,
           content: msg.content ?? '',
           severity: msg.severity ?? 'info'
         }));
 
+      // Log formatted messages
+      logger.debug('Formatted messages:', { 
+        count: formattedMessages.length,
+        messages: formattedMessages.map(m => ({ role: m.role, contentLength: m.content.length }))
+      });
+
       // Ensure we have valid messages after filtering
       if (formattedMessages.length === 0) {
-        const error = new Error('No valid messages to process');
-        logger.error('Error in chat service: No valid messages to process');
+        const error = new Error('No valid messages to process after filtering');
+        logger.error('Error in chat service:', error);
         throw error;
       }
 

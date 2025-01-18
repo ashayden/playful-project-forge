@@ -127,7 +127,8 @@ export function useMessages(conversationId: string) {
         conversation_id: conversationId,
         user_id: user.id,
         created_at: new Date().toISOString(),
-        is_streaming: false
+        is_streaming: false,
+        severity: 'info' as MessageSeverity
       };
 
       // Add optimistic message to cache
@@ -144,7 +145,8 @@ export function useMessages(conversationId: string) {
             role,
             conversation_id: conversationId,
             user_id: user.id,
-            is_streaming: false
+            is_streaming: false,
+            severity: 'info'
           }])
           .select()
           .single();
@@ -157,6 +159,20 @@ export function useMessages(conversationId: string) {
 
         // If it's a user message, get the AI response
         if (role === 'user') {
+          // Get existing messages for context
+          const existingMessages = queryClient.getQueryData<Message[]>([MESSAGES_KEY, conversationId]) || [];
+          
+          // Filter out temporary messages and ensure we have valid messages
+          const validMessages = existingMessages.filter(msg => 
+            msg && msg.id && !msg.id.startsWith('temp-') && 
+            msg.role && typeof msg.content === 'string'
+          );
+
+          logger.debug('Processing message with context:', {
+            messageCount: validMessages.length,
+            newMessage: { content, role }
+          });
+
           // Create optimistic AI message
           const tempAiId = `temp-${Date.now()}-ai`;
           const optimisticAiMessage: Message = {
@@ -166,7 +182,8 @@ export function useMessages(conversationId: string) {
             conversation_id: conversationId,
             user_id: user.id,
             created_at: new Date().toISOString(),
-            is_streaming: true
+            is_streaming: true,
+            severity: 'info' as MessageSeverity
           };
 
           // Add optimistic AI message to cache
@@ -183,7 +200,8 @@ export function useMessages(conversationId: string) {
                 role: 'assistant',
                 conversation_id: conversationId,
                 user_id: user.id,
-                is_streaming: true
+                is_streaming: true,
+                severity: 'info'
               }])
               .select()
               .single();
@@ -205,7 +223,7 @@ export function useMessages(conversationId: string) {
             setStreamingMessageId(streamingMessage.id);
 
             // Process the message with streaming
-            await chatService.processMessageStream(messages, {
+            await chatService.processMessageStream([...validMessages, userMessage], {
               onToken: async (token: string) => {
                 pendingContent += token;
                 
@@ -274,7 +292,8 @@ export function useMessages(conversationId: string) {
                   .update({ 
                     content: 'An error occurred while generating the response. Please try again.',
                     is_streaming: false,
-                    updated_at: new Date().toISOString()
+                    updated_at: new Date().toISOString(),
+                    severity: 'error'
                   })
                   .eq('id', streamingMessage.id);
 
