@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useChat } from '@/contexts/ChatContext';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatMessage } from '@/components/chat/ChatMessage';
@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 
 function ChatInterface() {
   const { toast } = useToast();
+  const [isInitializing, setIsInitializing] = useState(true);
   const {
     messages = [],
     isLoading,
@@ -24,26 +25,44 @@ function ChatInterface() {
   } = useChat();
 
   useEffect(() => {
+    let mounted = true;
+
     const initializeConversation = async () => {
       try {
-        if (!currentConversation && conversations.length === 0) {
-          logger.debug('No conversation found, creating new one');
-          await createConversation('New Chat');
-        } else if (!currentConversation && conversations.length > 0) {
-          logger.debug('Setting current conversation to latest:', conversations[0]);
-          setCurrentConversation(conversations[0]);
+        if (!currentConversation) {
+          if (conversations.length === 0) {
+            logger.debug('No conversation found, creating new one');
+            await createConversation('New Chat');
+            // Wait for conversations to update through React Query
+            if (mounted && conversations.length > 0) {
+              setCurrentConversation(conversations[0]);
+            }
+          } else {
+            logger.debug('Setting current conversation to latest:', conversations[0]);
+            setCurrentConversation(conversations[0]);
+          }
         }
       } catch (err) {
         logger.error('Failed to initialize conversation:', err);
-        toast({
-          title: "Error",
-          description: "Failed to create conversation. Please try again.",
-          variant: "destructive",
-        });
+        if (mounted) {
+          toast({
+            title: "Error",
+            description: "Failed to create conversation. Please try again.",
+            variant: "destructive",
+          });
+        }
+      } finally {
+        if (mounted) {
+          setIsInitializing(false);
+        }
       }
     };
 
     initializeConversation();
+
+    return () => {
+      mounted = false;
+    };
   }, [currentConversation, conversations, createConversation, setCurrentConversation, toast]);
 
   if (error) {
@@ -60,7 +79,7 @@ function ChatInterface() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading || isInitializing) {
     return <LoadingState message="Loading chat..." />;
   }
 
