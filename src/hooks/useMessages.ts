@@ -38,10 +38,42 @@ export function useMessages(conversationId: string) {
           queryClient.setQueryData<Message[]>(['messages', conversationId], (old) => {
             if (!old) return [updatedMessage];
             
-            // Find and update the message
+            // Check for temporary messages to replace
+            if (payload.eventType === 'INSERT') {
+              const tempIndex = old.findIndex(msg => 
+                msg.id?.startsWith('temp-') && 
+                msg.role === updatedMessage.role &&
+                msg.content === updatedMessage.content
+              );
+              
+              if (tempIndex >= 0) {
+                // Replace temporary message
+                const updated = [...old];
+                updated[tempIndex] = updatedMessage;
+                logger.debug('Replaced temp message:', {
+                  tempId: old[tempIndex].id,
+                  newId: updatedMessage.id
+                });
+                return updated;
+              }
+            }
+            
+            // Update existing message or add new one
             const index = old.findIndex(msg => msg.id === updatedMessage.id);
             if (index === -1) {
-              return [...old, updatedMessage];
+              // Avoid duplicates by checking content and role
+              const isDuplicate = old.some(msg => 
+                !msg.id?.startsWith('temp-') && 
+                msg.role === updatedMessage.role && 
+                msg.content === updatedMessage.content &&
+                msg.conversation_id === updatedMessage.conversation_id
+              );
+              
+              if (!isDuplicate) {
+                logger.debug('Adding new message:', updatedMessage.id);
+                return [...old, updatedMessage];
+              }
+              return old;
             }
             
             const updated = [...old];
