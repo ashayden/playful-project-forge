@@ -1,69 +1,111 @@
-# Welcome to your Lovable project
+# Playful Project Forge
 
-## Project info
+A modern AI chat interface built with React and TypeScript, featuring real-time messaging, development tools, and a beautiful dark-mode UI.
 
-**URL**: https://lovable.dev/projects/ad235e4d-a348-44d2-933a-053f972a368e
+## Tech Stack
 
-## How can I edit this code?
+- **Frontend Framework**: React 18 with TypeScript
+- **AI Integration**: LangChain for AI processing
+- **Backend & Auth**: Supabase (PostgreSQL + Real-time subscriptions)
+- **UI Components**: shadcn/ui (Built on Radix UI)
+- **Styling**: Tailwind CSS
+- **Build Tool**: Vite
+- **Testing**: Vitest + React Testing Library
 
-There are several ways of editing your application.
+## Features
 
-**Use Lovable**
+- 🤖 AI-powered chat interface
+- 🔄 Real-time message updates
+- 🎨 Modern dark theme UI
+- 🔒 Authentication with Supabase
+- 📊 Development metrics and status indicators
+- ⚡️ Fast and responsive design
+- 💻 Code syntax highlighting
+- 🌐 Real-time connection status
+- ⌨️ Typing indicators
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/ad235e4d-a348-44d2-933a-053f972a368e) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 16+
+- npm or yarn
+- Supabase account
+- OpenAI API key
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Environment Setup
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1. Clone the repository:
+```bash
+git clone https://github.com/ashayden/playful-project-forge.git
+cd playful-project-forge
+```
 
-Follow these steps:
+2. Install dependencies:
+```bash
+npm install
+```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+3. Create a `.env.local` file with your environment variables:
+```env
+VITE_OPENAI_API_KEY=your_openai_api_key
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Development
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+Start the development server:
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Run tests:
+```bash
+npm test
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Build for production:
+```bash
+npm run build
+```
 
-**Use GitHub Codespaces**
+## Project Structure
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```
+src/
+├── components/     # React components
+├── contexts/       # React contexts
+├── hooks/         # Custom hooks
+├── lib/           # Utility functions
+├── pages/         # Page components
+├── services/      # Service integrations
+├── styles/        # Global styles
+└── types/         # TypeScript types
+```
 
-## What technologies are used for this project?
+## Development Features
 
-This project is built with .
+- Real-time connection status monitoring
+- Message latency tracking
+- Development environment indicators
+- Type-safe components and hooks
+- Comprehensive error boundaries
+- Automated testing setup
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Deployment
 
-## How can I deploy this project?
+The project is configured for deployment on Vercel. Simply connect your GitHub repository to Vercel and add the required environment variables in your project settings.
 
-Simply open [Lovable](https://lovable.dev/projects/ad235e4d-a348-44d2-933a-053f972a368e) and click on Share -> Publish.
+## Contributing
 
-## I want to use a custom domain - is that possible?
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Open a pull request
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+## License
+
+MIT License - feel free to use this project for your own purposes.
+
