@@ -3,7 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/chat';
 import { logger } from '@/services/loggingService';
 import { ChatService } from '@/services/ai/ChatService';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 const MESSAGES_KEY = 'messages';
 
@@ -11,6 +12,58 @@ export function useMessages(conversationId: string) {
   const queryClient = useQueryClient();
   const chatService = new ChatService();
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+
+  // Add realtime subscription
+  useEffect(() => {
+    let channel: RealtimeChannel;
+
+    if (conversationId) {
+      channel = supabase
+        .channel(`messages:${conversationId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'messages',
+            filter: `conversation_id=eq.${conversationId}`
+          },
+          (payload) => {
+            logger.debug('Realtime message update:', payload);
+            
+            // Handle message updates
+            if (payload.eventType === 'UPDATE') {
+              queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
+                if (!old) return old;
+                return old.map(msg => 
+                  msg.id === payload.new.id 
+                    ? { ...msg, ...payload.new }
+                    : msg
+                );
+              });
+            }
+            
+            // Handle new messages
+            if (payload.eventType === 'INSERT') {
+              queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
+                if (!old) return [payload.new as Message];
+                return [...old, payload.new as Message];
+              });
+            }
+          }
+        )
+        .subscribe((status) => {
+          logger.debug('Realtime subscription status:', status);
+        });
+    }
+
+    return () => {
+      if (channel) {
+        logger.debug('Unsubscribing from realtime updates');
+        channel.unsubscribe();
+      }
+    };
+  }, [conversationId, queryClient]);
 
   const { data: messages = [], isLoading, error } = useQuery({
     queryKey: [MESSAGES_KEY, conversationId],
@@ -70,7 +123,7 @@ export function useMessages(conversationId: string) {
       // If it's a user message, get the AI response
       if (role === 'user') {
         try {
-          // Create a placeholder assistant message
+          // Create a placeholder assistant message with streaming status
           const { data: assistantMessage, error: assistantError } = await supabase
             .from('messages')
             .insert([{
@@ -78,6 +131,7 @@ export function useMessages(conversationId: string) {
               role: 'assistant' as const,
               conversation_id: conversationId,
               user_id: user.id,
+              is_streaming: true // Add streaming status
             }])
             .select()
             .single();
@@ -93,9 +147,31 @@ export function useMessages(conversationId: string) {
 
           const streamingMessage = assistantMessage as Message & { id: string };
           let streamedContent = '';
+          let batchedContent = '';
+          let updateTimeout: NodeJS.Timeout;
           
           // Set streaming state
           setStreamingMessageId(streamingMessage.id);
+
+          // Batch update function
+          const updateMessageContent = async (content: string, isComplete = false) => {
+            try {
+              const { error: updateError } = await supabase
+                .from('messages')
+                .update({ 
+                  content,
+                  is_streaming: !isComplete
+                })
+                .eq('id', streamingMessage.id);
+
+              if (updateError) {
+                logger.error('Error updating streaming message:', updateError);
+                throw updateError;
+              }
+            } catch (error) {
+              logger.error('Error in batch update:', error);
+            }
+          };
 
           // Prepare messages for AI processing
           const messagesForAI = [...messages, userMessage].map(msg => ({
@@ -108,59 +184,33 @@ export function useMessages(conversationId: string) {
           await chatService.processMessageStream(messagesForAI, {
             onToken: async (token: string) => {
               streamedContent += token;
-              
-              // Update the message content in the database
-              const { error: updateError } = await supabase
-                .from('messages')
-                .update({ content: streamedContent })
-                .eq('id', streamingMessage.id);
+              batchedContent += token;
 
-              if (updateError) {
-                logger.error('Error updating streaming message:', updateError);
-                throw updateError;
-              }
-
-              // Update the message in the cache with streaming state
-              queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
-                if (!old) return old;
-                return old.map(msg => 
-                  msg.id === streamingMessage.id 
-                    ? { ...msg, content: streamedContent, isStreaming: true }
-                    : msg
-                );
-              });
+              // Batch updates
+              if (updateTimeout) clearTimeout(updateTimeout);
+              updateTimeout = setTimeout(() => {
+                updateMessageContent(streamedContent);
+                batchedContent = '';
+              }, 100); // Batch updates every 100ms
             },
             onComplete: async () => {
               // Clear streaming state
               setStreamingMessageId(null);
               
-              // Final update to ensure consistency
-              const { error: finalUpdateError } = await supabase
-                .from('messages')
-                .update({ 
-                  content: streamedContent,
-                  isStreaming: false 
-                })
-                .eq('id', streamingMessage.id);
+              // Final update
+              await updateMessageContent(streamedContent, true);
 
-              if (finalUpdateError) {
-                logger.error('Error finalizing streaming message:', finalUpdateError);
-                throw finalUpdateError;
+              // Clear any pending updates
+              if (updateTimeout) {
+                clearTimeout(updateTimeout);
               }
-
-              // Update cache to remove streaming state
-              queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
-                if (!old) return old;
-                return old.map(msg => 
-                  msg.id === streamingMessage.id 
-                    ? { ...msg, content: streamedContent, isStreaming: false }
-                    : msg
-                );
-              });
             },
             onError: (error) => {
-              // Clear streaming state on error
+              // Clear streaming state and timeout on error
               setStreamingMessageId(null);
+              if (updateTimeout) {
+                clearTimeout(updateTimeout);
+              }
               logger.error('Error in streaming:', error);
               throw error;
             }
