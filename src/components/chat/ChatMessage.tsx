@@ -4,7 +4,14 @@ import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import { ComponentPropsWithoutRef } from 'react';
 import { TypingIndicator } from './TypingIndicator';
-import { CheckIcon, AlertCircle, Clock } from 'lucide-react';
+import { CheckIcon, AlertCircle, Clock, MoreVertical, Copy, Trash2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from 'sonner';
 import type { Components } from 'react-markdown';
 import type { Element } from 'hast';
 
@@ -12,12 +19,14 @@ interface ChatMessageProps extends ComponentPropsWithoutRef<'div'> {
   message: Message;
   isTyping?: boolean;
   streamingMessageId?: string | null;
+  onDelete?: (messageId: string) => Promise<void>;
 }
 
 export function ChatMessage({ 
   message, 
   isTyping = false,
   streamingMessageId = null,
+  onDelete,
   className, 
   ...props 
 }: ChatMessageProps) {
@@ -33,6 +42,25 @@ export function ChatMessage({
     if (!message.id || message.id.startsWith('temp-')) return <Clock className="h-4 w-4 text-zinc-500 animate-pulse" />;
     if (isCurrentlyStreaming) return <TypingIndicator isStreaming={true} className="h-4" />;
     return <CheckIcon className="h-4 w-4 text-green-500 opacity-0 group-hover:opacity-100 transition-opacity" />;
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      toast.success('Message copied to clipboard');
+    } catch (error) {
+      toast.error('Failed to copy message');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!message.id || !onDelete) return;
+    try {
+      await onDelete(message.id);
+      toast.success('Message deleted');
+    } catch (error) {
+      toast.error('Failed to delete message');
+    }
   };
 
   // Markdown components configuration
@@ -130,9 +158,41 @@ export function ChatMessage({
         </div>
       </div>
 
-      {/* Status Indicator */}
-      <div className="flex-shrink-0 self-start mt-1">
-        <StatusIndicator />
+      {/* Actions and Status */}
+      <div className="flex flex-col items-end gap-2">
+        {/* Message Actions */}
+        {!isCurrentlyStreaming && !isTyping && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button 
+                className="p-1 rounded-md hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label="Message actions"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={handleCopy}>
+                <Copy className="h-4 w-4 mr-2" />
+                Copy
+              </DropdownMenuItem>
+              {onDelete && (
+                <DropdownMenuItem 
+                  onClick={handleDelete}
+                  className="text-red-500 focus:text-red-500"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        
+        {/* Status Indicator */}
+        <div className="flex-shrink-0">
+          <StatusIndicator />
+        </div>
       </div>
     </div>
   );

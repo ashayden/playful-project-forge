@@ -316,11 +316,33 @@ export function useMessages(conversationId: string) {
     }
   });
 
+  const deleteMessage = useMutation({
+    mutationFn: async (messageId: string) => {
+      logger.debug('Deleting message:', messageId);
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', messageId);
+
+      if (error) {
+        logger.error('Error deleting message:', error);
+        throw error;
+      }
+
+      // Remove message from cache
+      queryClient.setQueryData<Message[]>([MESSAGES_KEY, conversationId], old => {
+        if (!old) return old;
+        return old.filter(msg => msg.id !== messageId);
+      });
+    }
+  });
+
   return {
     messages,
     isLoading,
     error,
     sendMessage,
+    deleteMessage: deleteMessage.mutateAsync,
     streamingMessageId,
     isStreaming: !!streamingMessageId,
     isSending: sendMessage.isPending

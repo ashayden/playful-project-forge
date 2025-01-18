@@ -15,7 +15,8 @@ function ChatInterface() {
     sendMessage,
     streamingMessageId,
     isLoading,
-    currentConversation
+    currentConversation,
+    deleteMessage
   } = useChat();
   const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   const { isConnected, latency } = useSupabaseStatus();
@@ -93,6 +94,7 @@ function ChatInterface() {
                     message={message}
                     isTyping={message.id === typingMessageId} 
                     streamingMessageId={streamingMessageId}
+                    onDelete={deleteMessage}
                   />
                 ))}
               </div>

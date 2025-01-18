@@ -15,6 +15,7 @@ type ChatContextType = {
   isCreating: boolean;
   messages: Message[];
   sendMessage: (content: string) => void;
+  deleteMessage: (messageId: string) => Promise<void>;
   isSending: boolean;
   isStreaming: boolean;
   streamingMessageId: string | null;
@@ -78,6 +79,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const {
     messages = [],
     sendMessage,
+    deleteMessage,
     isSending,
     isStreaming,
     streamingMessageId,
@@ -94,6 +96,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     isCreating,
     messages,
     sendMessage: (content: string) => sendMessage.mutate({ content }),
+    deleteMessage,
     isSending,
     isStreaming,
     streamingMessageId,
