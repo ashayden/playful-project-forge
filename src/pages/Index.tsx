@@ -14,7 +14,7 @@ export default function Index() {
     <ErrorBoundary>
       <div className="flex h-screen overflow-hidden">
         <ConversationSidebar />
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 bg-[#1E1E1E]">
           <ChatInterface />
         </div>
       </div>
@@ -46,8 +46,8 @@ function ChatInterface() {
   };
 
   return (
-    <>
-      <header className="sticky top-0 z-50 border-b border-zinc-800 bg-[#1E1E1E]/90 backdrop-blur supports-[backdrop-filter]:bg-[#1E1E1E]/50">
+    <div className="flex flex-col h-full">
+      <header className="flex-none border-b border-zinc-800 bg-[#1E1E1E]/90 backdrop-blur supports-[backdrop-filter]:bg-[#1E1E1E]/50">
         <div className="mx-auto max-w-3xl px-4 py-2">
           <div className="flex flex-col space-y-2">
             <div className="flex items-center justify-between">
@@ -90,7 +90,7 @@ function ChatInterface() {
       </header>
 
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-4">
+        <div className="mx-auto max-w-3xl px-4 py-4 min-h-0">
           {isLoading ? (
             <div className="flex h-full items-center justify-center py-8">
               <LoadingState message="Loading messages..." />
@@ -100,7 +100,7 @@ function ChatInterface() {
               <p className="text-sm text-zinc-400">No messages yet. Start a conversation!</p>
             </div>
           ) : (
-            <div className="pb-[200px] pt-4 space-y-6">
+            <div className="space-y-6 pb-[200px]">
               {messages.map((message) => (
                 <ChatMessage 
                   key={message.id} 
@@ -115,7 +115,7 @@ function ChatInterface() {
         </div>
       </main>
 
-      <footer className="sticky bottom-0 border-t border-zinc-800 bg-[#1E1E1E]/90 backdrop-blur supports-[backdrop-filter]:bg-[#1E1E1E]/50">
+      <footer className="flex-none border-t border-zinc-800 bg-[#1E1E1E]/90 backdrop-blur supports-[backdrop-filter]:bg-[#1E1E1E]/50">
         <div className="mx-auto max-w-3xl p-4">
           <ChatInput
             onSend={handleSendMessage}
@@ -123,6 +123,6 @@ function ChatInterface() {
           />
         </div>
       </footer>
-    </>
+    </div>
   );
 }
