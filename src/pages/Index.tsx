@@ -25,8 +25,11 @@ function ChatInterface() {
     if (!currentConversation && conversations?.length === 0) {
       logger.debug('No conversation found, creating new one');
       createConversation('New Chat');
+    } else if (!currentConversation && conversations?.length > 0) {
+      logger.debug('Setting current conversation to latest:', conversations[0]);
+      setCurrentConversation(conversations[0]);
     }
-  }, [currentConversation, conversations, createConversation]);
+  }, [currentConversation, conversations, createConversation, setCurrentConversation]);
 
   if (error) {
     throw error;
