@@ -1,56 +1,23 @@
 import { Message } from '@/types/messages';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Trash2 } from 'lucide-react';
 import { LoadingDots } from '@/components/LoadingDots';
 
 export interface ChatMessageProps {
   message: Message;
-  isTyping?: boolean;
   isStreaming?: boolean;
-  onDelete?: (messageId: string) => void;
 }
 
-export function ChatMessage({ message, isTyping, isStreaming, onDelete }: ChatMessageProps) {
+export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
   const isUser = message.role === 'user';
-  const isAssistant = message.role === 'assistant';
 
   return (
-    <div className={cn(
-      'group flex items-start gap-4 rounded-lg px-4 py-3',
-      isUser && 'bg-muted/50',
-      isAssistant && 'bg-muted'
-    )}>
-      <div className={cn(
-        'flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md border text-sm font-semibold',
-        isUser && 'bg-primary/10 text-primary border-primary/20',
-        isAssistant && 'bg-secondary/10 text-secondary border-secondary/20'
-      )}>
-        {isUser ? 'U' : 'AI'}
-      </div>
-      <div className="flex-1 space-y-2 overflow-hidden">
-        <div className="prose prose-neutral dark:prose-invert max-w-none">
-          <p className="whitespace-pre-wrap">
-            {message.content}
-            {(isTyping || isStreaming) && <LoadingDots />}
-          </p>
+    <div className={`p-4 ${isUser ? 'bg-blue-900' : 'bg-gray-800'} rounded`}>
+      <div className="flex gap-2">
+        <span className="font-bold">{isUser ? 'You' : 'AI'}:</span>
+        <div className="flex-1">
+          {message.content}
+          {isStreaming && <LoadingDots />}
         </div>
       </div>
-      {onDelete && message.id && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            'h-8 w-8 opacity-0 group-hover:opacity-100',
-            (isTyping || isStreaming) && 'pointer-events-none'
-          )}
-          onClick={() => onDelete(message.id!)}
-          disabled={isTyping || isStreaming}
-        >
-          <Trash2 className="h-4 w-4" />
-          <span className="sr-only">Delete message</span>
-        </Button>
-      )}
     </div>
   );
 }

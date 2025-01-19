@@ -1,7 +1,4 @@
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { SendIcon } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -10,7 +7,6 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const [input, setInput] = useState('');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,28 +23,23 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="relative">
-      <Textarea
-        ref={textareaRef}
-        tabIndex={0}
-        rows={1}
+    <form onSubmit={handleSubmit} className="flex gap-2">
+      <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Send a message..."
-        spellCheck={false}
-        className="min-h-[60px] w-full resize-none bg-background pr-12 text-foreground placeholder:text-muted-foreground focus:outline-none"
+        className="flex-1 p-2 bg-gray-800 text-white rounded border border-gray-700"
         disabled={disabled}
+        rows={1}
       />
-      <Button
+      <button
         type="submit"
-        size="icon"
         disabled={disabled || !input.trim()}
-        className="absolute bottom-3 right-3 h-8 w-8"
+        className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
       >
-        <SendIcon className="h-4 w-4" />
-        <span className="sr-only">Send message</span>
-      </Button>
+        Send
+      </button>
     </form>
   );
 }
