@@ -2,7 +2,7 @@ import { Message } from '@/types/messages';
 import { LoadingDots } from '@/components/LoadingDots';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 export interface ChatMessageProps {
   message: Message;
