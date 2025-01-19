@@ -1,111 +1,85 @@
 import { supabase } from '@/integrations/supabase/client';
 import { ChatOpenAI } from '@langchain/openai';
-import { 
-  ChatPromptTemplate, 
-  MessagesPlaceholder, 
-  HumanMessagePromptTemplate,
-  SystemMessagePromptTemplate,
-} from '@langchain/core/prompts';
-import { StringOutputParser } from '@langchain/core/output_parsers';
+import { SystemMessage, HumanMessage, AIMessage } from '@langchain/core';
 import { logger } from '@/services/loggingService';
+import { Message } from '@/types/ai';
 
 export async function POST(request: Request) {
   try {
-    const { message, conversationId } = await request.json();
+    const { message } = await request.json();
 
-    if (!message || !conversationId) {
-      return new Response('Missing required fields', { status: 400 });
-    }
-
-    // Get user from auth header
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
-    if (userError || !user) {
-      return new Response('Unauthorized', { status: 401 });
-    }
-
-    // Insert user message first
-    const { error: userMessageError } = await supabase
+    // Save user message
+    const { error: saveError } = await supabase
       .from('messages')
-      .insert([{
-        role: 'user',
-        content: message,
-        conversation_id: conversationId,
-        user_id: user.id,
-      }]);
+      .insert([{ content: message, type: 'user' }]);
 
-    if (userMessageError) {
-      logger.error('Error inserting user message:', userMessageError);
+    if (saveError) {
+      logger.error('Error saving user message:', saveError);
       return new Response('Error saving user message', { status: 500 });
     }
 
-    // Initialize ChatOpenAI
-    const model = new ChatOpenAI({
-      modelName: 'gpt-4o',
-      temperature: 0.7,
-      maxTokens: 1000,
-      streaming: false,
-    });
-
     // Get conversation history
-    const { data: messages, error: historyError } = await supabase
+    const { data: historyData, error: historyError } = await supabase
       .from('messages')
-      .select('role, content')
-      .eq('conversation_id', conversationId)
+      .select('*')
       .order('created_at', { ascending: true });
 
     if (historyError) {
-      logger.error('Error fetching conversation history:', historyError);
-      return new Response('Error fetching conversation history', { status: 500 });
+      logger.error('Error fetching history:', historyError);
+      return new Response('Error fetching history', { status: 500 });
     }
 
-    // Format messages for LangChain
-    const formattedHistory = messages?.map(msg => ({
-      type: msg.role,
+    // Convert history to Message format
+    const formattedHistory: Message[] = historyData.map(msg => ({
+      role: msg.type === 'user' ? 'user' : 'assistant',
       content: msg.content,
-    })) || [];
-
-    // Create chat prompt
-    const prompt = ChatPromptTemplate.fromMessages([
-      SystemMessagePromptTemplate.fromTemplate(
-        'You are a helpful AI assistant. Be concise and clear in your responses.'
-      ),
-      new MessagesPlaceholder('history'),
-      HumanMessagePromptTemplate.fromTemplate('{input}'),
-    ]);
+      timestamp: new Date(msg.created_at).getTime()
+    }));
 
     // Process the message
-    const chain = prompt.pipe(model).pipe(new StringOutputParser());
-    
-    const response = await chain.invoke({
-      history: formattedHistory,
-      input: message,
-    });
+    const response = await sendChatMessage(message, formattedHistory);
 
     // Insert assistant message
-    const { error: insertError } = await supabase
+    const { error: assistantError } = await supabase
       .from('messages')
-      .insert([{
-        role: 'assistant',
-        content: response,
-        conversation_id: conversationId,
-        user_id: user.id,
-      }]);
+      .insert([{ content: response, type: 'assistant' }]);
 
-    if (insertError) {
-      logger.error('Error inserting assistant message:', insertError);
-      return new Response('Error saving response', { status: 500 });
+    if (assistantError) {
+      logger.error('Error saving assistant message:', assistantError);
+      return new Response('Error saving assistant message', { status: 500 });
     }
 
-    // Update conversation has_response flag
-    await supabase
-      .from('conversations')
-      .update({ has_response: true })
-      .eq('id', conversationId);
-
-    return new Response(response);
+    return new Response(JSON.stringify({ response }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (error) {
     logger.error('Error in chat API:', error);
     return new Response('Internal Server Error', { status: 500 });
+  }
+}
+
+export async function sendChatMessage(message: string, history: Message[]) {
+  try {
+    const model = new ChatOpenAI({
+      modelName: 'gpt-4o',
+      temperature: 0.7,
+      streaming: true,
+    });
+
+    const messages = [
+      new SystemMessage("You are a helpful AI assistant. Be concise and clear in your responses."),
+      ...history.map(msg => 
+        msg.role === 'user' 
+          ? new HumanMessage(msg.content)
+          : new AIMessage(msg.content)
+      ),
+      new HumanMessage(message)
+    ];
+
+    const response = await model.invoke(messages);
+    return response.content;
+  } catch (error) {
+    logger.error('Error in sendChatMessage:', error);
+    throw error;
   }
 } 
