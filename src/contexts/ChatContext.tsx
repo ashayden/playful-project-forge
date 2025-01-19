@@ -1,8 +1,9 @@
-import { createContext, type ReactNode, useState, useCallback, useEffect } from 'react';
+import { createContext, type ReactNode, useState, useCallback, useEffect, useRef } from 'react';
 import type { Message, Conversation, ChatContextType } from '@/types/chat';
 import { logger } from '@/services/loggingService';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
+import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 export const ChatContext = createContext<ChatContextType | null>(null);
 
@@ -10,8 +11,18 @@ interface ChatProviderProps {
   children: ReactNode;
 }
 
+// Define the message type for real-time updates
+type MessagePayload = {
+  conversation_id: string;
+  content: string;
+  role: 'user' | 'assistant';
+  user_id?: string;
+  created_at: string;
+};
+
 export function ChatProvider({ children }: ChatProviderProps) {
   const queryClient = useQueryClient();
+  const messageStreamRef = useRef<string>('');
 
   // State declarations with explicit types
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
@@ -21,6 +32,60 @@ export function ChatProvider({ children }: ChatProviderProps) {
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
+
+  // Set up real-time subscriptions
+  useEffect(() => {
+    const conversationsSubscription = supabase
+      .channel('conversations')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'conversations' },
+        async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+
+          // Refresh conversations list
+          const { data: updatedConversations } = await supabase
+            .from('conversations')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+
+          if (updatedConversations) {
+            setConversations(updatedConversations);
+          }
+        }
+      )
+      .subscribe();
+
+    const messagesSubscription = supabase
+      .channel('messages')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'messages' },
+        async (payload: RealtimePostgresChangesPayload<MessagePayload>) => {
+          if (!currentConversation?.id) return;
+          
+          const newMessage = payload.new as MessagePayload;
+          if (!newMessage || newMessage.conversation_id !== currentConversation.id) return;
+
+          // Refresh messages for current conversation
+          const { data: updatedMessages } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('conversation_id', currentConversation.id)
+            .order('created_at', { ascending: true });
+
+          if (updatedMessages) {
+            setMessages(updatedMessages);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      conversationsSubscription.unsubscribe();
+      messagesSubscription.unsubscribe();
+    };
+  }, [currentConversation?.id]);
 
   // Create a new chat when user logs in and no conversations exist
   useEffect(() => {
@@ -186,7 +251,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     
     setIsSending(true);
     setIsStreaming(true);
-    let tempUserMessage: Message | null = null;
+    messageStreamRef.current = '';
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -195,18 +260,32 @@ export function ChatProvider({ children }: ChatProviderProps) {
         throw new Error('User not authenticated');
       }
 
-      // Create temporary user message for immediate display
-      tempUserMessage = {
+      // Save user message to database first
+      const { error: saveError } = await supabase
+        .from('messages')
+        .insert([{
+          role: 'user',
+          content,
+          conversation_id: currentConversation.id,
+          user_id: user.id
+        }])
+        .select()
+        .single();
+
+      if (saveError) throw saveError;
+
+      // Create temporary assistant message for streaming
+      const tempAssistantMessage: Message = {
         id: crypto.randomUUID(),
-        role: 'user',
-        content,
+        role: 'assistant',
+        content: '',
         conversation_id: currentConversation.id,
-        user_id: user.id,
+        user_id: undefined,
         created_at: new Date().toISOString()
       };
-      
-      // Immediately update UI with user message
-      setMessages((prev: Message[]) => [...prev, tempUserMessage!]);
+
+      // Add temporary assistant message to UI
+      setMessages((prev) => [...prev, tempAssistantMessage]);
 
       // Get auth token for API call
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -230,7 +309,6 @@ export function ChatProvider({ children }: ChatProviderProps) {
         throw new Error(`API Error: ${errorText}`);
       }
 
-      // Handle streaming response
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
 
@@ -238,57 +316,42 @@ export function ChatProvider({ children }: ChatProviderProps) {
         throw new Error('No response stream available');
       }
 
-      // Create temporary assistant message
-      const tempAssistantMessage: Message = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: '',
-        conversation_id: currentConversation.id,
-        user_id: undefined,
-        created_at: new Date().toISOString()
-      };
-
-      setMessages(prev => [...prev, tempAssistantMessage]);
-
-      // Process the stream
+      // Read the stream
       while (true) {
         const { done, value } = await reader.read();
-        
-        if (done) {
-          break;
-        }
+        if (done) break;
 
         const chunk = decoder.decode(value);
-        
-        // Update the assistant message with new content
-        setMessages(prev => prev.map(msg => 
-          msg.id === tempAssistantMessage.id
-            ? { ...msg, content: msg.content + chunk }
-            : msg
-        ));
+        messageStreamRef.current += chunk;
+
+        // Update the temporary message with accumulated content
+        setMessages((prev) => {
+          const updated = [...prev];
+          const lastMessage = updated[updated.length - 1];
+          if (lastMessage && lastMessage.id === tempAssistantMessage.id) {
+            lastMessage.content = messageStreamRef.current;
+          }
+          return updated;
+        });
       }
 
-      // Fetch final messages to ensure we have the correct IDs from the database
-      const { data: updatedMessages, error: messagesError } = await supabase
+      // Save the complete assistant message to database
+      await supabase
         .from('messages')
-        .select('*')
-        .eq('conversation_id', currentConversation.id)
-        .order('created_at', { ascending: true });
-
-      if (messagesError) throw messagesError;
-      
-      setMessages(updatedMessages || []);
+        .insert([{
+          role: 'assistant',
+          content: messageStreamRef.current,
+          conversation_id: currentConversation.id,
+          user_id: user.id
+        }]);
 
     } catch (error) {
       logger.error('Failed to send message:', error);
-      // Remove the temporary message on error
-      if (tempUserMessage) {
-        setMessages((prev: Message[]) => prev.filter(m => m.id !== tempUserMessage!.id));
-      }
       throw error;
     } finally {
       setIsSending(false);
       setIsStreaming(false);
+      messageStreamRef.current = '';
     }
   }, [currentConversation]);
 
