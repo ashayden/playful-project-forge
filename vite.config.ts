@@ -7,6 +7,7 @@ import path from "path";
 export default defineConfig(({ command, mode }) => {
   // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, process.cwd(), '');
+  const isProd = mode === 'production';
   
   return {
     plugins: [react(), tsconfigPaths()],
@@ -34,14 +35,17 @@ export default defineConfig(({ command, mode }) => {
         },
       },
       chunkSizeWarningLimit: 1000,
-      sourcemap: true,
-      minify: 'terser',
-      terserOptions: {
+      sourcemap: !isProd,
+      minify: isProd ? 'terser' : false,
+      terserOptions: isProd ? {
         compress: {
-          drop_console: !env.DEV,
-          drop_debugger: !env.DEV,
+          drop_console: true,
+          drop_debugger: true,
         },
-      },
+        format: {
+          comments: false
+        }
+      } : undefined,
       assetsInlineLimit: 4096,
       reportCompressedSize: false,
     },
