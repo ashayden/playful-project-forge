@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { logger } from "@/services/loggingService";
 
 interface AuthContextType {
   session: Session | null;
@@ -28,16 +29,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { error } = await supabase.auth.signOut();
       if (error) {
         if (error.message.includes("session_not_found")) {
-          // If session is not found, clear local state anyway
           setSession(null);
           setUser(null);
-          console.log("Session was already invalid, cleared local state");
+          logger.debug("Session was already invalid, cleared local state");
           return;
         }
         throw error;
       }
     } catch (error) {
-      console.error("Error during sign out:", error);
+      logger.error("Error during sign out:", error);
       toast({
         variant: "destructive",
         title: "Sign Out Error",
@@ -47,44 +47,67 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error("Error fetching session:", error.message);
-        toast({
-          variant: "destructive",
-          title: "Authentication Error",
-          description: "There was a problem with your session. Please try logging in again.",
-        });
-        return;
-      }
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    let mounted = true;
 
-    // Listen for auth changes
+    const initializeAuth = async () => {
+      try {
+        logger.debug("Initializing auth...");
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          logger.error("Error fetching session:", error);
+          toast({
+            variant: "destructive",
+            title: "Authentication Error",
+            description: "There was a problem with your session. Please try logging in again.",
+          });
+          return;
+        }
+
+        if (mounted) {
+          logger.debug("Setting initial session:", session ? "Found" : "None");
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false);
+        }
+      } catch (error) {
+        logger.error("Unexpected error during auth initialization:", error);
+        if (mounted) {
+          setLoading(false);
+          toast({
+            variant: "destructive",
+            title: "Authentication Error",
+            description: "There was an unexpected problem initializing authentication.",
+          });
+        }
+      }
+    };
+
+    initializeAuth();
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state changed:", event);
+      logger.debug("Auth state changed:", event);
       
       if (event === 'TOKEN_REFRESHED') {
-        console.log('Token was refreshed successfully');
+        logger.debug('Token was refreshed successfully');
       }
 
       if (event === 'SIGNED_OUT') {
-        // Clear local state
         setSession(null);
         setUser(null);
       }
 
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+      if (mounted) {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+      }
     });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, [toast]);

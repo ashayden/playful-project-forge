@@ -3,40 +3,68 @@ import { useNavigate } from "react-router-dom";
 import { Auth as SupabaseAuth } from "@supabase/auth-ui-react";
 import { ThemeSupa } from "@supabase/auth-ui-shared";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/services/loggingService";
+import { useToast } from "@/hooks/use-toast";
 
 const Auth = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error("Session error:", error.message);
-        return;
+    const checkSession = async () => {
+      try {
+        logger.debug("Checking initial session...");
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          logger.error("Session error:", error);
+          toast({
+            variant: "destructive",
+            title: "Authentication Error",
+            description: "Failed to check your session. Please try again.",
+          });
+          return;
+        }
+        
+        if (session) {
+          logger.debug("Found existing session, redirecting to home");
+          navigate("/");
+        }
+      } catch (error) {
+        logger.error("Unexpected error checking session:", error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "An unexpected error occurred. Please try again.",
+        });
       }
-      if (session) {
-        navigate("/");
-      }
-    });
+    };
+
+    checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      logger.debug("Auth state changed:", event);
+      
       if (event === "SIGNED_IN" && session) {
+        logger.debug("User signed in, redirecting to home");
         navigate("/");
       }
       
       if (event === "SIGNED_OUT") {
+        logger.debug("User signed out, staying on auth page");
         navigate("/auth");
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, toast]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#1E1E1E]">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background">
       <div className="w-full max-w-[400px] px-4">
-        <h1 className="text-4xl font-bold text-center mb-2 text-zinc-100">Chat Assistant v001</h1>
-        <p className="text-zinc-400 text-center mb-8">React + TypeScript, LangChain, Supabase</p>
-        <div className="bg-zinc-900 border-zinc-800 border rounded-lg p-4 shadow-lg">
+        <h1 className="text-4xl font-bold text-center mb-2 text-foreground">Chat Assistant</h1>
+        <p className="text-muted-foreground text-center mb-8">React + TypeScript, LangChain, Supabase</p>
+        <div className="bg-card border-border border rounded-lg p-4 shadow-lg">
           <SupabaseAuth 
             supabaseClient={supabase}
             appearance={{
@@ -44,17 +72,17 @@ const Auth = () => {
               variables: {
                 default: {
                   colors: {
-                    brand: '#7c3aed',
-                    brandAccent: '#6d28d9',
-                    brandButtonText: 'white',
-                    defaultButtonBackground: '#27272a',
-                    defaultButtonBackgroundHover: '#3f3f46',
-                    inputBackground: '#18181b',
-                    inputBorder: '#27272a',
-                    inputBorderHover: '#3f3f46',
-                    inputBorderFocus: '#6d28d9',
-                    inputText: 'white',
-                    dividerBackground: '#27272a',
+                    brand: 'hsl(var(--primary))',
+                    brandAccent: 'hsl(var(--primary))',
+                    brandButtonText: 'hsl(var(--primary-foreground))',
+                    defaultButtonBackground: 'hsl(var(--secondary))',
+                    defaultButtonBackgroundHover: 'hsl(var(--secondary))',
+                    inputBackground: 'hsl(var(--background))',
+                    inputBorder: 'hsl(var(--border))',
+                    inputBorderHover: 'hsl(var(--border))',
+                    inputBorderFocus: 'hsl(var(--ring))',
+                    inputText: 'hsl(var(--foreground))',
+                    dividerBackground: 'hsl(var(--border))',
                   },
                   fonts: {
                     bodyFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
@@ -66,27 +94,27 @@ const Auth = () => {
               },
               style: {
                 button: {
-                  borderRadius: '6px',
+                  borderRadius: 'var(--radius)',
                   padding: '10px 15px',
                   fontSize: '14px',
                   fontWeight: '500',
                 },
                 input: {
-                  borderRadius: '6px',
+                  borderRadius: 'var(--radius)',
                   padding: '10px 15px',
                   fontSize: '14px',
                 },
                 label: {
                   fontSize: '14px',
                   marginBottom: '4px',
-                  color: '#a1a1aa',
+                  color: 'hsl(var(--muted-foreground))',
                 },
                 message: {
                   fontSize: '14px',
                   marginBottom: '12px',
                 },
                 anchor: {
-                  color: '#7c3aed',
+                  color: 'hsl(var(--primary))',
                   fontSize: '14px',
                   textDecoration: 'none',
                 },
