@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useState, useCallback } from 'react';
+import { createContext, type ReactNode, useState, useCallback, useEffect } from 'react';
 import type { Message, Conversation, ChatContextType } from '@/types/chat';
 import { logger } from '@/services/loggingService';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,6 +22,63 @@ export function ChatProvider({ children }: ChatProviderProps) {
   const [isSending, setIsSending] = useState<boolean>(false);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
 
+  // Fetch initial conversations
+  useEffect(() => {
+    const fetchConversations = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user?.id) {
+          logger.error('No authenticated user found');
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from('conversations')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          logger.error('Error fetching conversations:', error);
+          return;
+        }
+
+        setConversations(data || []);
+      } catch (error) {
+        logger.error('Failed to fetch conversations:', error);
+      }
+    };
+
+    fetchConversations();
+  }, []);
+
+  // Fetch messages when conversation changes
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!currentConversation?.id) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', currentConversation.id)
+          .order('created_at', { ascending: true });
+        
+        if (error) {
+          logger.error('Error fetching messages:', error);
+          return;
+        }
+
+        setMessages(data || []);
+      } catch (error) {
+        logger.error('Failed to fetch messages:', error);
+      }
+    };
+
+    fetchMessages();
+  }, [currentConversation?.id]);
+
   const createConversation = useCallback(async (title: string) => {
     setIsCreating(true);
     try {
@@ -42,8 +99,9 @@ export function ChatProvider({ children }: ChatProviderProps) {
         throw error;
       }
 
-      setConversations((prev: Conversation[]) => [...prev, data]);
+      setConversations((prev: Conversation[]) => [data, ...prev]);
       setCurrentConversation(data);
+      setMessages([]);
 
       await queryClient.invalidateQueries({ queryKey: ['conversations'] });
     } catch (error) {
@@ -70,6 +128,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       setConversations((prev: Conversation[]) => prev.filter((conv: Conversation) => conv.id !== id));
       if (currentConversation?.id === id) {
         setCurrentConversation(null);
+        setMessages([]);
       }
 
       await queryClient.invalidateQueries({ queryKey: ['conversations'] });
@@ -85,7 +144,6 @@ export function ChatProvider({ children }: ChatProviderProps) {
     if (!currentConversation) return;
     
     setIsSending(true);
-    setIsStreaming(true);
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -94,24 +152,73 @@ export function ChatProvider({ children }: ChatProviderProps) {
         throw new Error('User not authenticated');
       }
 
-      const userMessage: Message = {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content,
-        conversation_id: currentConversation.id
-      };
+      // Insert user message
+      const { data: userMessageData, error: userMessageError } = await supabase
+        .from('messages')
+        .insert([{
+          role: 'user',
+          content,
+          conversation_id: currentConversation.id,
+          user_id: user.id
+        }])
+        .select()
+        .single();
       
-      setMessages((prev: Message[]) => [...prev, userMessage]);
+      if (userMessageError) throw userMessageError;
+      
+      setMessages((prev: Message[]) => [...prev, userMessageData]);
 
-      const assistantMessage: Message = {
-        id: crypto.randomUUID(),
+      // Create placeholder for assistant message
+      setIsStreaming(true);
+      const placeholderId = crypto.randomUUID();
+      const placeholderMessage: Message = {
+        id: placeholderId,
         role: 'assistant',
-        content: 'I am thinking...',
+        content: '',
         conversation_id: currentConversation.id
       };
       
-      setMessages((prev: Message[]) => [...prev, assistantMessage]);
+      setMessages((prev: Message[]) => [...prev, placeholderMessage]);
+
+      // Get auth token for Edge Function
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+
+      // Call Edge Function
+      const response = await fetch(`/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ 
+          message: content,
+          conversationId: currentConversation.id 
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to get assistant response');
+
+      const responseText = await response.text();
+
+      const { data: assistantMessageData, error: assistantMessageError } = await supabase
+        .from('messages')
+        .insert([{
+          role: 'assistant',
+          content: responseText,
+          conversation_id: currentConversation.id,
+          user_id: user.id
+        }])
+        .select()
+        .single();
       
+      if (assistantMessageError) throw assistantMessageError;
+
+      setMessages((prev: Message[]) => [
+        ...prev.filter(m => m.id !== placeholderId),
+        assistantMessageData
+      ]);
+
     } catch (error) {
       logger.error('Failed to send message:', error);
       throw error;
