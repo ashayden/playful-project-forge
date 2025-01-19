@@ -1,22 +1,34 @@
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/services/loggingService';
-import { Message } from '@/types/ai';
 
 export async function POST(request: Request) {
   try {
-    // Validate request
-    if (!request.body) {
+    // Get auth token from request header
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ error: 'Missing request body' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Missing or invalid authorization header' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    const { message } = await request.json();
+    // Get user from auth token
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
-    if (!message || typeof message !== 'string') {
+    if (authError || !user) {
       return new Response(
-        JSON.stringify({ error: 'Invalid message format' }),
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate request body
+    const { message, conversationId } = await request.json();
+    
+    if (!message || typeof message !== 'string' || !conversationId) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid request format' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -24,7 +36,12 @@ export async function POST(request: Request) {
     // Save user message
     const { error: saveError } = await supabase
       .from('messages')
-      .insert([{ content: message, type: 'user' }]);
+      .insert([{ 
+        content: message, 
+        role: 'user',
+        conversation_id: conversationId,
+        user_id: user.id
+      }]);
 
     if (saveError) {
       logger.error('Error saving user message:', saveError);
@@ -35,20 +52,30 @@ export async function POST(request: Request) {
     const { data: historyData, error: historyError } = await supabase
       .from('messages')
       .select('*')
-      .order('created_at', { ascending: true })
-      .limit(10);
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
 
     if (historyError) {
       logger.error('Error fetching history:', historyError);
       throw new Error('Failed to fetch conversation history');
     }
 
-    // Convert history to Message format
-    const formattedHistory: Message[] = historyData.map(msg => ({
-      role: msg.type === 'user' ? 'user' : 'assistant',
-      content: msg.content,
-      timestamp: new Date(msg.created_at).getTime()
-    }));
+    // Create empty assistant message for streaming
+    const { data: assistantMessage, error: assistantError } = await supabase
+      .from('messages')
+      .insert([{ 
+        content: '', 
+        role: 'assistant',
+        conversation_id: conversationId,
+        user_id: null
+      }])
+      .select()
+      .single();
+
+    if (assistantError) {
+      logger.error('Error creating assistant message:', assistantError);
+      throw new Error('Failed to create assistant message');
+    }
 
     // Dynamically import LangChain modules
     const [{ ChatOpenAI }, { SystemMessage, HumanMessage, AIMessage }] = await Promise.all([
@@ -60,15 +87,15 @@ export async function POST(request: Request) {
     const model = new ChatOpenAI({
       modelName: 'gpt-4o',
       temperature: 0.7,
-      streaming: false,
+      streaming: true,
       maxRetries: 3,
       timeout: 60000,
     });
 
-    // Prepare messages
+    // Prepare messages for AI
     const messages = [
       new SystemMessage("You are a helpful AI assistant. Be concise and clear in your responses."),
-      ...formattedHistory.map(msg => 
+      ...historyData.map(msg => 
         msg.role === 'user' 
           ? new HumanMessage(msg.content)
           : new AIMessage(msg.content)
@@ -76,30 +103,48 @@ export async function POST(request: Request) {
       new HumanMessage(message)
     ];
 
-    // Get AI response
-    const response = await model.invoke(messages);
-    if (!response?.content) {
-      throw new Error('No response received from AI model');
-    }
+    // Get streaming response
+    const stream = await model.stream(messages);
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        let fullResponse = '';
+        try {
+          for await (const chunk of stream) {
+            const content = typeof chunk.content === 'string' 
+              ? chunk.content 
+              : JSON.stringify(chunk.content);
+            fullResponse += content;
+            controller.enqueue(encoder.encode(content));
+            
+            // Update assistant message in database
+            await supabase
+              .from('messages')
+              .update({ content: fullResponse })
+              .eq('id', assistantMessage.id);
+          }
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+    });
 
-    // Save AI response
-    const { error: assistantError } = await supabase
-      .from('messages')
-      .insert([{ content: response.content, type: 'assistant' }]);
+    // Update conversation to indicate it has a response
+    await supabase
+      .from('conversations')
+      .update({ has_response: true })
+      .eq('id', conversationId);
 
-    if (assistantError) {
-      logger.error('Error saving assistant message:', assistantError);
-      throw new Error('Failed to save assistant response');
-    }
+    // Return streaming response
+    return new Response(readable, {
+      headers: { 
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+      }
+    });
 
-    // Return successful response
-    return new Response(
-      JSON.stringify({ 
-        response: response.content,
-        success: true 
-      }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
   } catch (error) {
     logger.error('Error in chat API:', error);
     return new Response(
