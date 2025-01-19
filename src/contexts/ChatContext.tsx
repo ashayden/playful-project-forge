@@ -152,7 +152,20 @@ export function ChatProvider({ children }: ChatProviderProps) {
         throw new Error('User not authenticated');
       }
 
-      // Insert user message
+      // Create temporary user message for immediate display
+      const tempUserMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content,
+        conversation_id: currentConversation.id,
+        user_id: user.id,
+        created_at: new Date().toISOString()
+      };
+      
+      // Immediately update UI with user message
+      setMessages((prev: Message[]) => [...prev, tempUserMessage]);
+
+      // Insert user message into database
       const { data: userMessageData, error: userMessageError } = await supabase
         .from('messages')
         .insert([{
@@ -166,7 +179,10 @@ export function ChatProvider({ children }: ChatProviderProps) {
       
       if (userMessageError) throw userMessageError;
       
-      setMessages((prev: Message[]) => [...prev, userMessageData]);
+      // Update the temporary message with the real one from the database
+      setMessages((prev: Message[]) => prev.map(msg => 
+        msg.id === tempUserMessage.id ? userMessageData : msg
+      ));
 
       // Create placeholder for assistant message
       setIsStreaming(true);
@@ -175,17 +191,18 @@ export function ChatProvider({ children }: ChatProviderProps) {
         id: placeholderId,
         role: 'assistant',
         content: '',
-        conversation_id: currentConversation.id
+        conversation_id: currentConversation.id,
+        created_at: new Date().toISOString()
       };
       
       setMessages((prev: Message[]) => [...prev, placeholderMessage]);
 
-      // Get auth token for Edge Function
+      // Get auth token for API call
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) throw sessionError;
 
-      // Call Edge Function
-      const response = await fetch(`/api/chat`, {
+      // Call API
+      const response = await fetch(`${window.location.origin}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

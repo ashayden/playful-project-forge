@@ -21,10 +21,10 @@ export async function POST(request: Request) {
 
     // Initialize ChatOpenAI
     const model = new ChatOpenAI({
-      modelName: 'gpt-4o-mini-2024-07-18',
+      modelName: 'gpt-4o',
       temperature: 0.7,
-      maxTokens: 8192,
-      streaming: true,
+      maxTokens: 1000,
+      streaming: false, // Disable streaming for now until we implement proper streaming
     });
 
     // Create chat prompt
@@ -50,12 +50,12 @@ export async function POST(request: Request) {
     const chain = prompt.pipe(model).pipe(new StringOutputParser());
     
     const response = await chain.invoke({
-      history: messages,
+      history: messages || [],
       input: message,
     });
 
-    // Save assistant's response
-    const { error: saveError } = await supabase
+    // Insert assistant message into database
+    const { error: insertError } = await supabase
       .from('messages')
       .insert([{
         role: 'assistant',
@@ -64,20 +64,12 @@ export async function POST(request: Request) {
         user_id: user.id,
       }]);
 
-    if (saveError) {
-      logger.error('Error saving response:', saveError);
+    if (insertError) {
+      logger.error('Error inserting assistant message:', insertError);
       return new Response('Error saving response', { status: 500 });
     }
 
-    // Update conversation has_response flag
-    await supabase
-      .from('conversations')
-      .update({ has_response: true })
-      .eq('id', conversationId);
-
-    return new Response(response, {
-      headers: { 'Content-Type': 'text/plain' },
-    });
+    return new Response(response);
   } catch (error) {
     logger.error('Error in chat API:', error);
     return new Response('Internal Server Error', { status: 500 });
