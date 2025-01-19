@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
-import { MessageSquare, Settings, Trash2, RefreshCcw } from 'lucide-react';
+import { Settings, Trash2, RefreshCcw } from 'lucide-react';
 import { useChat } from '@/hooks/useChat';
 import { cn } from '@/lib/utils';
 import {
