@@ -14,8 +14,7 @@ export default defineConfig(({ command, mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-      },
-      dedupe: ['@langchain/core', '@langchain/openai']
+      }
     },
     build: {
       rollupOptions: {
@@ -29,7 +28,6 @@ export default defineConfig(({ command, mode }) => {
               '@radix-ui/react-tooltip',
             ],
             'supabase-vendor': ['@supabase/supabase-js', '@supabase/auth-ui-react'],
-            'ai-vendor': ['@langchain/openai', '@langchain/core'],
             'utils': ['./src/lib/utils.ts', './src/services/loggingService.ts'],
             'chat-core': ['./src/services/ai/AIService.ts', './src/services/ai/ChatService.ts'],
           },
@@ -37,7 +35,6 @@ export default defineConfig(({ command, mode }) => {
       },
       chunkSizeWarningLimit: 1000,
       sourcemap: true,
-      // Performance optimizations
       minify: 'terser',
       terserOptions: {
         compress: {
@@ -45,13 +42,8 @@ export default defineConfig(({ command, mode }) => {
           drop_debugger: !env.DEV,
         },
       },
-      // Asset optimization
-      assetsInlineLimit: 4096, // 4kb
+      assetsInlineLimit: 4096,
       reportCompressedSize: false,
-      commonjsOptions: {
-        include: [/@langchain\/.*/, /node_modules/],
-        transformMixedEsModules: true
-      }
     },
     optimizeDeps: {
       include: [
@@ -60,21 +52,12 @@ export default defineConfig(({ command, mode }) => {
         'react-router-dom',
         '@radix-ui/react-dialog',
         '@radix-ui/react-dropdown-menu',
-        '@langchain/openai',
-        '@langchain/core',
       ],
-      exclude: [],
-      esbuildOptions: {
-        target: 'esnext',
-        supported: { 
-          bigint: true 
-        },
-      }
+      exclude: ['@langchain/openai', '@langchain/core'],
     },
     server: {
       port: 3000,
       strictPort: true,
-      // Enable HMR
       hmr: {
         overlay: true,
       },

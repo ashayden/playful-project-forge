@@ -1,10 +1,4 @@
 import { supabase } from '@/integrations/supabase/client';
-import { ChatOpenAI } from '@langchain/openai';
-import { 
-  SystemMessage,
-  HumanMessage,
-  AIMessage,
-} from '@langchain/core/messages';
 import { logger } from '@/services/loggingService';
 import { Message } from '@/types/ai';
 
@@ -42,7 +36,7 @@ export async function POST(request: Request) {
       .from('messages')
       .select('*')
       .order('created_at', { ascending: true })
-      .limit(10); // Limit context window
+      .limit(10);
 
     if (historyError) {
       logger.error('Error fetching history:', historyError);
@@ -56,13 +50,19 @@ export async function POST(request: Request) {
       timestamp: new Date(msg.created_at).getTime()
     }));
 
+    // Dynamically import LangChain modules
+    const [{ ChatOpenAI }, { SystemMessage, HumanMessage, AIMessage }] = await Promise.all([
+      import('@langchain/openai'),
+      import('@langchain/core/messages')
+    ]);
+
     // Initialize AI model
     const model = new ChatOpenAI({
       modelName: 'gpt-4o',
       temperature: 0.7,
       streaming: false,
       maxRetries: 3,
-      timeout: 60000, // 60 second timeout
+      timeout: 60000,
     });
 
     // Prepare messages
