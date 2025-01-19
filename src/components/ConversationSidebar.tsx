@@ -1,24 +1,19 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
-import { Plus, MessageSquare, Settings, Trash2, RefreshCcw } from 'lucide-react';
+import { MessageSquare, Settings, Trash2, RefreshCcw } from 'lucide-react';
 import { useChat } from '@/hooks/useChat';
 import { cn } from '@/lib/utils';
-import { Conversation } from '@/types/chat';
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
-  SidebarMenuButton,
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronRight, MessageSquarePlus } from 'lucide-react';
@@ -39,12 +34,9 @@ export function ConversationSidebar() {
   const { conversationId } = useParams();
   const {
     conversations,
-    currentConversation,
     createConversation,
-    setCurrentConversation,
-    isCreating,
     deleteConversation,
-    isDeleting,
+    isCreating,
     clearAllConversations
   } = useChat();
   const [expandedDays, setExpandedDays] = useState<string[]>(['today']);
@@ -212,47 +204,5 @@ export function ConversationSidebar() {
         </SidebarFooter>
       </Sidebar>
     </SidebarProvider>
-  );
-}
-
-function ConversationItem({
-  conversation,
-  isActive,
-  onClick,
-  onDelete,
-  isDeleting,
-}: {
-  conversation: Conversation;
-  isActive: boolean;
-  onClick: () => void;
-  onDelete: (event: React.MouseEvent) => void;
-  isDeleting: boolean;
-}) {
-  return (
-    <SidebarMenuButton
-      isActive={isActive}
-      onClick={onClick}
-      tooltip={formatDistanceToNow(new Date(conversation.created_at), { addSuffix: true })}
-      className="px-2 py-1"
-    >
-      <div className="flex items-center gap-2">
-        <MessageSquare className="h-4 w-4 shrink-0" />
-        <span className="flex-1 truncate text-sm">
-          {conversation.title || 'New Chat'}
-        </span>
-      </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        className={cn(
-          'h-5 w-5 opacity-0 group-hover:opacity-100',
-          isActive && 'opacity-100'
-        )}
-        onClick={onDelete}
-        disabled={isDeleting}
-      >
-        <Trash2 className="h-3 w-3" />
-      </Button>
-    </SidebarMenuButton>
   );
 } 
