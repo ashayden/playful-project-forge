@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { SendHorizontal } from 'lucide-react';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -27,7 +28,13 @@ export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className={cn("flex gap-2", className)}>
+    <form 
+      onSubmit={handleSubmit} 
+      className={cn(
+        "flex gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
+        className
+      )}
+    >
       <Textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
@@ -35,14 +42,24 @@ export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
         placeholder="Send a message..."
         disabled={disabled}
         rows={1}
-        className="flex-1 min-h-[2.5rem] resize-none"
+        className={cn(
+          "flex-1 min-h-[2.5rem] resize-none",
+          "focus-visible:ring-1 focus-visible:ring-ring",
+          "placeholder:text-muted-foreground"
+        )}
       />
       <Button
         type="submit"
+        size="icon"
         disabled={disabled || !input.trim()}
-        className="h-10"
+        className={cn(
+          "h-10 w-10",
+          "transition-opacity",
+          (!input.trim() || disabled) && "opacity-50"
+        )}
       >
-        Send
+        <SendHorizontal className="h-5 w-5" />
+        <span className="sr-only">Send message</span>
       </Button>
     </form>
   );

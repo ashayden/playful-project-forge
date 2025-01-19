@@ -19,6 +19,7 @@ import { ChatProvider } from '@/contexts/ChatContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Routes } from './components/Routes';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { ThemeProvider } from '@/components/ui/theme-provider';
 
 // Configure React Query client with optimal settings for chat application
 const queryClient = new QueryClient({
@@ -32,23 +33,25 @@ const queryClient = new QueryClient({
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-background font-sans antialiased dark">
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
-            <AuthProvider>
-              <ChatProvider>
-                <TooltipProvider>
-                  <Toaster />
-                  <Sonner />
-                  <Routes />
-                </TooltipProvider>
-              </ChatProvider>
-            </AuthProvider>
-          </BrowserRouter>
-          <ReactQueryDevtools initialIsOpen={false} />
-        </QueryClientProvider>
-      </ErrorBoundary>
-    </div>
+    <ThemeProvider defaultTheme="dark" storageKey="app-theme">
+      <div className="min-h-screen bg-background font-sans antialiased">
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <BrowserRouter>
+              <AuthProvider>
+                <ChatProvider>
+                  <TooltipProvider>
+                    <Toaster />
+                    <Sonner />
+                    <Routes />
+                  </TooltipProvider>
+                </ChatProvider>
+              </AuthProvider>
+            </BrowserRouter>
+            <ReactQueryDevtools initialIsOpen={false} />
+          </QueryClientProvider>
+        </ErrorBoundary>
+      </div>
+    </ThemeProvider>
   );
 }

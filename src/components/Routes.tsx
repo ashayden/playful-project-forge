@@ -1,6 +1,7 @@
 import { Routes as RouterRoutes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/components/AuthProvider';
 import { LoadingState } from '@/components/LoadingSpinner';
+import { AppLayout } from '@/components/AppLayout';
 import Index from '@/pages/Index';
 import Auth from '@/pages/Auth';
 
@@ -27,13 +28,14 @@ export function Routes() {
     <RouterRoutes>
       <Route path="/auth" element={<Auth />} />
       <Route
-        path="/"
         element={
           <ProtectedRoute>
-            <Index />
+            <AppLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route path="/" element={<Index />} />
+      </Route>
     </RouterRoutes>
   );
 } 

@@ -1,13 +1,36 @@
 /**
- * Represents a chat message in the system
+ * Types for chat functionality
  */
+
 export interface Message {
   id: string;
-  created_at: string;
+  role: 'user' | 'assistant';
   content: string;
-  role: 'user' | 'assistant' | 'system';
-  conversation_id: string;
-  user_id: string;
+  created_at?: string;
+  conversation_id?: string;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at?: string;
+  user_id?: string;
+  has_response?: boolean;
+}
+
+export interface ChatContextType {
+  messages: Message[];
+  conversations: Conversation[];
+  currentConversation: Conversation | null;
+  isCreating: boolean;
+  isDeleting: boolean;
+  isSending: boolean;
+  isStreaming: boolean;
+  createConversation: (title: string) => Promise<void>;
+  setCurrentConversation: (conversation: Conversation | null) => void;
+  deleteConversation: (id: string) => Promise<void>;
+  sendMessage: (content: string) => Promise<void>;
 }
 
 /**
@@ -19,18 +42,6 @@ export interface MessageReaction {
   user_id: string;
   reaction: string;
   created_at: string;
-}
-
-/**
- * Represents a conversation in the chat system
- */
-export interface Conversation {
-  id: string;
-  created_at: string;
-  title: string;
-  user_id: string;
-  model: string;
-  has_response: boolean;
 }
 
 /**
