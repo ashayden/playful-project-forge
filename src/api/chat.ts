@@ -6,6 +6,7 @@ export async function POST(request: Request) {
     // Get auth token from request header
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
+      logger.error('Missing or invalid authorization header');
       return new Response(
         JSON.stringify({ error: 'Missing or invalid authorization header' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
+      logger.error('Auth error:', authError);
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
@@ -25,8 +27,10 @@ export async function POST(request: Request) {
 
     // Validate request body
     const { message, conversationId } = await request.json();
+    logger.info('Processing message:', { conversationId, messageLength: message?.length });
     
     if (!message || typeof message !== 'string' || !conversationId) {
+      logger.error('Invalid request format:', { message, conversationId });
       return new Response(
         JSON.stringify({ error: 'Invalid request format' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
@@ -60,6 +64,8 @@ export async function POST(request: Request) {
       throw new Error('Failed to fetch conversation history');
     }
 
+    logger.info('Fetched conversation history:', { messageCount: historyData?.length });
+
     // Create empty assistant message for streaming
     const { data: assistantMessage, error: assistantError } = await supabase
       .from('messages')
@@ -78,12 +84,14 @@ export async function POST(request: Request) {
     }
 
     // Dynamically import LangChain modules
+    logger.info('Importing LangChain modules...');
     const [{ ChatOpenAI }, { SystemMessage, HumanMessage, AIMessage }] = await Promise.all([
       import('@langchain/openai'),
       import('@langchain/core/messages')
     ]);
 
     // Initialize AI model
+    logger.info('Initializing AI model...');
     const model = new ChatOpenAI({
       modelName: 'gpt-4o',
       temperature: 0.7,
@@ -103,6 +111,7 @@ export async function POST(request: Request) {
       new HumanMessage(message)
     ];
 
+    logger.info('Starting stream...');
     // Get streaming response
     const stream = await model.stream(messages);
     const encoder = new TextEncoder();
@@ -110,6 +119,7 @@ export async function POST(request: Request) {
       async start(controller) {
         let fullResponse = '';
         try {
+          logger.info('Processing stream...');
           for await (const chunk of stream) {
             // Ensure chunk content is a string and handle different response formats
             let content = '';
@@ -125,6 +135,7 @@ export async function POST(request: Request) {
 
             if (content.trim()) {
               fullResponse += content;
+              logger.debug('Received chunk:', { contentLength: content.length });
               
               // Encode as a proper SSE message
               const message = `data: ${JSON.stringify({ content })}\n\n`;
@@ -140,6 +151,7 @@ export async function POST(request: Request) {
 
           // Ensure final message is saved
           if (fullResponse.trim()) {
+            logger.info('Saving final response:', { responseLength: fullResponse.length });
             await supabase
               .from('messages')
               .update({ content: fullResponse })
@@ -169,6 +181,7 @@ export async function POST(request: Request) {
       .update({ has_response: true })
       .eq('id', conversationId);
 
+    logger.info('Returning response stream');
     // Return streaming response with correct headers
     return new Response(readable, {
       headers: { 
