@@ -2,8 +2,19 @@ import { Routes as RouterRoutes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/components/AuthProvider';
 import { LoadingState } from '@/components/LoadingSpinner';
 import { AppLayout } from '@/components/AppLayout';
-import Index from '@/pages/Index';
+import { ChatInterface } from '@/components/chat/ChatInterface';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Auth from '@/pages/Auth';
+
+function Index() {
+  return (
+    <ErrorBoundary>
+      <div className="flex-1 flex flex-col">
+        <ChatInterface />
+      </div>
+    </ErrorBoundary>
+  );
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
