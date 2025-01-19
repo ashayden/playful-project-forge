@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     // Create chat prompt
     const prompt = ChatPromptTemplate.fromMessages([
       ['system', 'You are a helpful AI assistant. Be concise and clear in your responses.'],
-      MessagesPlaceholder('history'),
+      new MessagesPlaceholder('history'),
       HumanMessagePromptTemplate.fromTemplate('{input}'),
     ]);
 
