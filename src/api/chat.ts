@@ -1,10 +1,10 @@
 import { supabase } from '@/integrations/supabase/client';
-import { ChatOpenAI } from '@langchain/openai/dist';
+import { ChatOpenAI } from '@langchain/openai';
 import { 
   SystemMessage,
   HumanMessage,
   AIMessage,
-} from '@langchain/core/dist/messages';
+} from '@langchain/core/messages';
 import { logger } from '@/services/loggingService';
 import { Message } from '@/types/ai';
 

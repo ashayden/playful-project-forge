@@ -14,9 +14,8 @@ export default defineConfig(({ command, mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        '@langchain/core': path.resolve(__dirname, 'node_modules/@langchain/core/dist/index.js'),
-        '@langchain/core/messages': path.resolve(__dirname, 'node_modules/@langchain/core/dist/messages/index.js'),
-      }
+      },
+      dedupe: ['@langchain/core', '@langchain/openai']
     },
     build: {
       rollupOptions: {
@@ -51,6 +50,7 @@ export default defineConfig(({ command, mode }) => {
       reportCompressedSize: false,
       commonjsOptions: {
         include: [/@langchain\/.*/, /node_modules/],
+        transformMixedEsModules: true
       }
     },
     optimizeDeps: {
@@ -63,7 +63,13 @@ export default defineConfig(({ command, mode }) => {
         '@langchain/openai',
         '@langchain/core',
       ],
-      exclude: []
+      exclude: [],
+      esbuildOptions: {
+        target: 'esnext',
+        supported: { 
+          bigint: true 
+        },
+      }
     },
     server: {
       port: 3000,
