@@ -13,7 +13,9 @@ export default defineConfig(({ command, mode }) => {
     base: '/',
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src')
+        '@': path.resolve(__dirname, './src'),
+        '@langchain/core': path.resolve(__dirname, 'node_modules/@langchain/core/dist/index.js'),
+        '@langchain/core/messages': path.resolve(__dirname, 'node_modules/@langchain/core/dist/messages/index.js'),
       }
     },
     build: {
@@ -59,7 +61,7 @@ export default defineConfig(({ command, mode }) => {
         '@radix-ui/react-dialog',
         '@radix-ui/react-dropdown-menu',
         '@langchain/openai',
-        '@langchain/core/messages',
+        '@langchain/core',
       ],
       exclude: []
     },
