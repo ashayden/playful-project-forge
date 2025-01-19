@@ -146,7 +146,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     deleteConversation,
     isDeleting,
     messages,
-    sendMessage: handleSendMessage,
+    sendMessage,
     deleteMessage,
     isSending,
     isStreaming,
