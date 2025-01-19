@@ -188,8 +188,6 @@ export function ChatProvider({ children }: ChatProviderProps) {
         throw new Error(`API Error: ${errorText}`);
       }
 
-      const responseText = await response.text();
-
       // Fetch updated messages to ensure we have the correct IDs from the database
       const { data: updatedMessages, error: messagesError } = await supabase
         .from('messages')
