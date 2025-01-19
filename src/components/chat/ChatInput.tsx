@@ -1,11 +1,15 @@
 import { useState } from 'react';
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
   disabled?: boolean;
+  className?: string;
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
   const [input, setInput] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -23,23 +27,23 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
-      <textarea
+    <form onSubmit={handleSubmit} className={cn("flex gap-2", className)}>
+      <Textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Send a message..."
-        className="flex-1 p-2 bg-gray-800 text-white rounded border border-gray-700"
         disabled={disabled}
         rows={1}
+        className="flex-1 min-h-[2.5rem] resize-none"
       />
-      <button
+      <Button
         type="submit"
         disabled={disabled || !input.trim()}
-        className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+        className="h-10"
       >
         Send
-      </button>
+      </Button>
     </form>
   );
 }

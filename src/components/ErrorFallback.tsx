@@ -1,23 +1,19 @@
-interface ErrorFallbackProps {
-  error: Error;
-  resetErrorBoundary?: () => void;
-}
+import { FallbackProps } from 'react-error-boundary';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
 
-export function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps) {
+export function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   return (
-    <div role="alert" className="p-4 rounded-lg border bg-destructive/10 text-destructive">
-      <h2 className="text-lg font-semibold mb-2">Something went wrong</h2>
-      <pre className="text-sm overflow-auto p-2 bg-background rounded mb-4">
-        {error.message}
-      </pre>
-      {resetErrorBoundary && (
-        <button
-          onClick={resetErrorBoundary}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md"
-        >
+    <Alert variant="destructive" className="m-4">
+      <AlertCircle className="h-4 w-4" />
+      <AlertTitle>Something went wrong</AlertTitle>
+      <AlertDescription className="mt-2 space-y-4">
+        <p className="text-sm">{error.message}</p>
+        <Button onClick={resetErrorBoundary} variant="outline" size="sm">
           Try again
-        </button>
-      )}
-    </div>
+        </Button>
+      </AlertDescription>
+    </Alert>
   );
 } 

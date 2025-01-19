@@ -16,9 +16,8 @@ export function TypingIndicator({
       aria-label="AI is typing"
       className={cn(
         "flex items-center space-x-1",
-        isStreaming && "scale-100",
-        !isStreaming && "scale-0",
-        "transition-transform duration-200",
+        isStreaming ? "opacity-100" : "opacity-0",
+        "transition-opacity duration-200",
         className
       )}
       {...props}
@@ -27,12 +26,11 @@ export function TypingIndicator({
         <div
           key={i}
           className={cn(
-            "h-1.5 w-1.5 rounded-full bg-blue-500",
+            "h-1.5 w-1.5 rounded-full bg-primary",
             "animate-bounce",
-            // Stagger the animation
-            i === 0 && "animation-delay-0",
-            i === 1 && "animation-delay-[200ms]",
-            i === 2 && "animation-delay-[400ms]"
+            i === 0 && "[animation-delay:0ms]",
+            i === 1 && "[animation-delay:200ms]",
+            i === 2 && "[animation-delay:400ms]"
           )}
         />
       ))}
