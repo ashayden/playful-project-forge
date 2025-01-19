@@ -88,7 +88,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const {
     messages = [],
-    sendMessage,
+    sendMessage: sendMessageToBackend,
     deleteMessage,
     isSending,
     isStreaming,
@@ -101,37 +101,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     try {
       // If no current conversation, create one with a title from the first message
       if (!currentConversation) {
-        const title = generateTitle(content);
+        const title = content.split(' ').slice(0, 4).join(' ') + '...';
         const newConversation = await createConversation(title);
         setCurrentConversation(newConversation);
-        await sendMessage(content);
+        await sendMessageToBackend(content);
         return;
       }
 
       // Send the message
-      await sendMessage(content);
+      await sendMessageToBackend(content);
 
       // Update conversation title if it's still "New Chat" and this is the first message
       if (currentConversation.title === 'New Chat' && messages.length === 0) {
-        const title = generateTitle(content);
+        const title = content.split(' ').slice(0, 4).join(' ') + '...';
         await updateConversation({ id: currentConversation.id, title });
-      }
-
-      // Mark conversation as having a response after the assistant replies
-      if (!currentConversation.has_response && messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
-        await updateConversation({ id: currentConversation.id, hasResponse: true });
       }
     } catch (err) {
       logger.error('Failed to send message:', err);
       throw err;
     }
-  };
-
-  const generateTitle = (content: string): string => {
-    // Extract first few words or first sentence, whichever is shorter
-    const words = content.split(' ').slice(0, 4).join(' ');
-    const firstSentence = content.split(/[.!?]/, 1)[0];
-    return (words.length < firstSentence.length ? words : firstSentence) + '...';
   };
 
   const value = {
@@ -146,7 +134,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     deleteConversation,
     isDeleting,
     messages,
-    sendMessage,
+    sendMessage: handleSendMessage,
     deleteMessage,
     isSending,
     isStreaming,
