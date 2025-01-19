@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline - Playful Project Forge</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #18181b;
+            color: #fafafa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            text-align: center;
+            padding: 2rem;
+            background-color: #27272a;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #f4f4f5;
+        }
+        p {
+            color: #a1a1aa;
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
+        }
+        .button {
+            display: inline-block;
+            background-color: #3f3f46;
+            color: #fafafa;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        .button:hover {
+            background-color: #52525b;
+        }
+        .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">📡</div>
+        <h1>You're Offline</h1>
+        <p>
+            It looks like you've lost your internet connection. 
+            Some features may be limited until you're back online.
+        </p>
+        <a href="/" class="button">Try Again</a>
+    </div>
+    <script>
+        // Check for online status
+        window.addEventListener('online', () => {
+            window.location.reload();
+        });
+    </script>
+</body>
+</html> 

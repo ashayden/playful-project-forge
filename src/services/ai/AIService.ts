@@ -14,12 +14,15 @@ import {
 } from '@langchain/core/messages';
 import { aiConfig, modelConfig } from '@/config/ai.config';
 import { logger } from '@/services/loggingService';
+import { 
+  Message, 
+  AIServiceConfig, 
+  StreamCallbacks as AIStreamCallbacks,
+  AIError,
+  AIErrorCode
+} from '@/types/ai';
 
-export type StreamCallbacks = {
-  onToken: (token: string) => void;
-  onComplete?: () => void;
-  onError?: (error: Error) => void;
-};
+export type StreamCallbacks = AIStreamCallbacks;
 
 /**
  * Service class for handling AI interactions using Langchain
@@ -30,70 +33,54 @@ export class AIService {
   private prompt: ChatPromptTemplate;
   private systemPrompt: string;
   private readonly maxContextTokens: number;
+  private readonly config: AIServiceConfig;
 
-  constructor(systemPrompt: string = `You are a helpful AI assistant. Please follow these guidelines:
-1. Use complete, well-formed sentences
-2. When using numbered lists, ensure proper formatting (1., 2., etc.)
-3. Avoid abbreviations unless explicitly requested
-4. Double-check sentence structure before responding
-5. Use proper punctuation and spacing`) {
-    // Log all environment variables (without their values)
-    logger.debug('Environment variables check:', { 
-      hasOpenAIKey: !!import.meta.env.VITE_OPENAI_API_KEY,
-      hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
-      hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
-    });
-
-    logger.debug('Initializing AIService with config:', { 
-      modelName: modelConfig.modelName,
-      hasApiKey: !!aiConfig.openAIApiKey,
-      systemPrompt,
-      environment: import.meta.env.MODE,
-      maxTokens: modelConfig.maxTokens,
-      contextWindow: modelConfig.contextWindow
-    });
-
-    if (!import.meta.env.VITE_OPENAI_API_KEY) {
-      const error = new Error('OpenAI API key is not set in environment variables');
-      logger.error('Environment variable error:', error);
-      throw error;
-    }
-
-    if (!aiConfig.openAIApiKey) {
-      const error = new Error('OpenAI API key is not configured in aiConfig');
-      logger.error('Configuration error:', error);
-      throw error;
-    }
-
+  constructor(systemPrompt: string = aiConfig.defaultPrompt) {
+    this.validateEnvironment();
+    this.config = modelConfig;
+    
     try {
-      this.maxContextTokens = modelConfig.contextWindow;
-      
-      // Initialize streaming model
-      this.streamingModel = new ChatOpenAI({
-        modelName: modelConfig.modelName,
-        temperature: modelConfig.temperature,
-        maxTokens: modelConfig.maxTokens,
-        openAIApiKey: aiConfig.openAIApiKey,
-        streaming: true,
-        maxConcurrency: 1, // Ensure sequential processing
-      });
-
-      // Initialize non-streaming model
-      this.nonStreamingModel = new ChatOpenAI({
-        modelName: modelConfig.modelName,
-        temperature: modelConfig.temperature,
-        maxTokens: modelConfig.maxTokens,
-        openAIApiKey: aiConfig.openAIApiKey,
-        streaming: false,
-      });
-
+      this.maxContextTokens = this.config.contextWindow;
       this.systemPrompt = systemPrompt;
+      
+      this.streamingModel = this.createModel(true);
+      this.nonStreamingModel = this.createModel(false);
       this.prompt = this.createPromptTemplate();
-      logger.debug('AIService initialized successfully');
+      
+      logger.debug('AIService initialized successfully', {
+        modelName: this.config.modelName,
+        maxTokens: this.config.maxTokens,
+      });
     } catch (error) {
-      logger.error('Error initializing AIService:', error);
-      throw new Error(`Failed to initialize AI service: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new AIError(
+        'Failed to initialize AI service',
+        AIErrorCode.INITIALIZATION_ERROR,
+        { error },
+        false
+      );
     }
+  }
+
+  private validateEnvironment(): void {
+    if (!import.meta.env.VITE_OPENAI_API_KEY) {
+      throw new AIError(
+        'OpenAI API key is not set',
+        AIErrorCode.INITIALIZATION_ERROR,
+        { missingKey: 'VITE_OPENAI_API_KEY' },
+        false
+      );
+    }
+  }
+
+  private createModel(streaming: boolean): ChatOpenAI {
+    return new ChatOpenAI({
+      modelName: this.config.modelName,
+      temperature: this.config.temperature,
+      maxTokens: this.config.maxTokens,
+      openAIApiKey: aiConfig.openAIApiKey,
+      streaming,
+      maxConcurrency: streaming ? 1 : undefined,
+    });
   }
 
   private createPromptTemplate(): ChatPromptTemplate {
@@ -104,12 +91,16 @@ export class AIService {
         HumanMessagePromptTemplate.fromTemplate('{input}'),
       ]);
     } catch (error) {
-      logger.error('Error creating prompt template:', error);
-      throw error;
+      throw new AIError(
+        'Failed to create prompt template',
+        AIErrorCode.INITIALIZATION_ERROR,
+        { error },
+        false
+      );
     }
   }
 
-  private convertToLangchainMessage(message: { role: string; content: string }): BaseMessage {
+  private convertToLangchainMessage(message: Message): BaseMessage {
     try {
       switch (message.role) {
         case 'system':
@@ -117,21 +108,31 @@ export class AIService {
         case 'assistant':
           return new AIMessage(message.content);
         case 'user':
-        default:
           return new HumanMessage(message.content);
+        default:
+          throw new AIError(
+            'Invalid message role',
+            AIErrorCode.INVALID_INPUT,
+            { role: message.role },
+            false
+          );
       }
     } catch (error) {
-      logger.error('Error converting message:', error);
-      throw error;
+      throw new AIError(
+        'Failed to convert message',
+        AIErrorCode.INVALID_INPUT,
+        { error, message },
+        false
+      );
     }
   }
 
-  private truncateHistory(messages: Array<{ role: string; content: string }>, maxTokens: number): Array<{ role: string; content: string }> {
+  private truncateHistory(messages: Message[], maxTokens: number): Message[] {
     // Simple token estimation: 4 chars ~= 1 token
     const estimateTokens = (text: string) => Math.ceil(text.length / 4);
     
     let totalTokens = estimateTokens(this.systemPrompt);
-    const result = [];
+    const result: Message[] = [];
     
     // Process messages from most recent to oldest
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -139,7 +140,7 @@ export class AIService {
       const msgTokens = estimateTokens(msg.content);
       
       if (totalTokens + msgTokens <= maxTokens) {
-        result.unshift(msg); // Add to start of array to maintain order
+        result.unshift(msg);
         totalTokens += msgTokens;
       } else {
         break;
@@ -149,95 +150,118 @@ export class AIService {
     return result;
   }
 
+  private async retryOperation<T>(
+    operation: () => Promise<T>,
+    retryCount = 0
+  ): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (error instanceof AIError && !error.retryable) {
+        throw error;
+      }
+
+      if (retryCount >= this.config.maxRetries) {
+        throw new AIError(
+          'Max retries reached',
+          AIErrorCode.API_ERROR,
+          { error, retryCount },
+          false
+        );
+      }
+
+      logger.warn(`Retry attempt ${retryCount + 1}:`, { error });
+      await new Promise(resolve => setTimeout(resolve, this.config.retryDelay));
+      return this.retryOperation(operation, retryCount + 1);
+    }
+  }
+
   /**
    * Process a message and return a non-streaming response
    * @param messages - Array of messages in the conversation
    * @returns Promise containing the AI's response
    */
-  async processMessage(messages: Array<{ role: string; content: string }>): Promise<string> {
-    try {
-      if (!messages || messages.length === 0) {
-        throw new Error('No messages provided');
+  async processMessage(messages: Message[]): Promise<string> {
+    return this.retryOperation(async () => {
+      try {
+        if (!messages?.length) {
+          throw new AIError(
+            'No messages provided',
+            AIErrorCode.INVALID_INPUT,
+            undefined,
+            false
+          );
+        }
+
+        const availableContext = this.maxContextTokens - this.config.maxTokens;
+        const truncatedMessages = this.truncateHistory(messages, availableContext);
+        
+        const history = truncatedMessages.slice(0, -1).map(msg => this.convertToLangchainMessage(msg));
+        const currentMessage = truncatedMessages[truncatedMessages.length - 1].content;
+
+        const chain = RunnableSequence.from([
+          this.prompt,
+          this.nonStreamingModel,
+          new StringOutputParser(),
+        ]);
+
+        const response = await Promise.race([
+          chain.invoke({
+            input: currentMessage,
+            history: history,
+          }),
+          new Promise((_, reject) => 
+            setTimeout(
+              () => reject(new AIError('Request timeout', AIErrorCode.TIMEOUT, undefined, true)),
+              this.config.timeoutMs
+            )
+          )
+        ]) as string;
+
+        if (!response) {
+          throw new AIError(
+            'No response received',
+            AIErrorCode.API_ERROR,
+            undefined,
+            true
+          );
+        }
+
+        return response;
+      } catch (error) {
+        if (error instanceof AIError) {
+          throw error;
+        }
+        throw new AIError(
+          'Failed to process message',
+          AIErrorCode.API_ERROR,
+          { error },
+          true
+        );
       }
-
-      // Calculate available context space (leaving room for response)
-      const availableContext = this.maxContextTokens - modelConfig.maxTokens;
-      
-      // Truncate history if needed
-      const truncatedMessages = this.truncateHistory(messages, availableContext);
-      
-      logger.debug('Processing message with history:', { 
-        originalMessageCount: messages.length,
-        truncatedMessageCount: truncatedMessages.length,
-        lastMessage: truncatedMessages[truncatedMessages.length - 1]?.content,
-        roles: truncatedMessages.map(m => m.role)
-      });
-
-      // Convert messages to Langchain format
-      const history = truncatedMessages.slice(0, -1).map(msg => this.convertToLangchainMessage(msg));
-      const currentMessage = truncatedMessages[truncatedMessages.length - 1].content;
-
-      logger.debug('Creating conversation chain');
-      const chain = RunnableSequence.from([
-        this.prompt,
-        this.nonStreamingModel, // Use non-streaming model
-        new StringOutputParser(),
-      ]);
-
-      logger.debug('Invoking chain with input:', { 
-        currentMessage,
-        historyLength: history.length,
-        systemPrompt: this.systemPrompt
-      });
-
-      const response = await chain.invoke({
-        input: currentMessage,
-        history: history,
-      });
-
-      if (!response) {
-        throw new Error('No response received from AI');
-      }
-
-      logger.debug('Received response from chain:', { 
-        responseLength: response.length,
-        responsePreview: response.substring(0, 100)
-      });
-      
-      return response;
-    } catch (error) {
-      logger.error('Error processing message:', error);
-      throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    });
   }
 
   async processMessageStream(
-    messages: Array<{ role: string; content: string }>,
+    messages: Message[],
     callbacks: StreamCallbacks
   ): Promise<void> {
     try {
-      if (!messages || messages.length === 0) {
-        throw new Error('No messages provided');
+      if (!messages?.length) {
+        throw new AIError(
+          'No messages provided',
+          AIErrorCode.INVALID_INPUT,
+          undefined,
+          false
+        );
       }
 
-      // Calculate available context space (leaving room for response)
-      const availableContext = this.maxContextTokens - modelConfig.maxTokens;
-      
-      // Truncate history if needed
+      const availableContext = this.maxContextTokens - this.config.maxTokens;
       const truncatedMessages = this.truncateHistory(messages, availableContext);
       
-      logger.debug('Processing streaming message with history:', { 
-        originalMessageCount: messages.length,
-        truncatedMessageCount: truncatedMessages.length,
-        lastMessage: truncatedMessages[truncatedMessages.length - 1]?.content,
-        roles: truncatedMessages.map(m => m.role)
-      });
-
-      // Convert messages to Langchain format
       const history = truncatedMessages.slice(0, -1).map(msg => this.convertToLangchainMessage(msg));
       const currentMessage = truncatedMessages[truncatedMessages.length - 1].content;
 
-      logger.debug('Creating streaming conversation chain');
       const chain = RunnableSequence.from([
         this.prompt,
         this.streamingModel,
@@ -252,10 +276,8 @@ export class AIService {
 
       try {
         for await (const chunk of stream) {
-          // Add chunk to buffer
           buffer += chunk;
           
-          // Look for natural break points (end of sentences, end of lines)
           const breakMatch = buffer.match(/([.!?]\s+|[\n]\s*)/);
           
           if (breakMatch) {
@@ -270,19 +292,28 @@ export class AIService {
           }
         }
         
-        // Send any remaining text in the buffer
         if (buffer.trim()) {
           callbacks.onToken(buffer);
         }
         
         callbacks.onComplete?.();
       } catch (error) {
-        logger.error('Error in stream processing:', error);
-        callbacks.onError?.(error instanceof Error ? error : new Error('Unknown streaming error'));
+        const aiError = new AIError(
+          'Error in stream processing',
+          AIErrorCode.API_ERROR,
+          { error },
+          true
+        );
+        callbacks.onError?.(aiError);
       }
     } catch (error) {
-      logger.error('Error processing streaming message:', error);
-      callbacks.onError?.(error instanceof Error ? error : new Error('Failed to process streaming message'));
+      const aiError = error instanceof AIError ? error : new AIError(
+        'Failed to process streaming message',
+        AIErrorCode.API_ERROR,
+        { error },
+        true
+      );
+      callbacks.onError?.(aiError);
     }
   }
 

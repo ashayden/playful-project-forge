@@ -28,15 +28,43 @@ export default defineConfig(({ command, mode }) => {
               '@radix-ui/react-tooltip',
             ],
             'supabase-vendor': ['@supabase/supabase-js', '@supabase/auth-ui-react'],
+            'ai-vendor': ['@langchain/openai', '@langchain/core'],
+            'utils': ['./src/lib/utils.ts', './src/services/loggingService.ts'],
+            'chat-core': ['./src/services/ai/AIService.ts', './src/services/ai/ChatService.ts'],
           },
         },
       },
       chunkSizeWarningLimit: 1000,
       sourcemap: true,
+      // Performance optimizations
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: !env.DEV,
+          drop_debugger: !env.DEV,
+        },
+      },
+      // Asset optimization
+      assetsInlineLimit: 4096, // 4kb
+      reportCompressedSize: false,
+    },
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        'react-router-dom',
+        '@radix-ui/react-dialog',
+        '@radix-ui/react-dropdown-menu',
+        '@langchain/openai',
+      ],
     },
     server: {
       port: 3000,
       strictPort: true,
+      // Enable HMR
+      hmr: {
+        overlay: true,
+      },
     },
     preview: {
       port: 3000,

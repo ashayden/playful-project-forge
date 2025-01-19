@@ -6,12 +6,18 @@
  * @property temperature - Controls randomness in responses (0.0 to 1.0)
  * @property maxTokens - Maximum length of generated responses (16k limit)
  * @property contextWindow - Maximum context window size (128k tokens)
+ * @property timeoutMs - Timeout for API requests in milliseconds
+ * @property maxRetries - Maximum number of retries for API requests
+ * @property retryDelay - Delay between retries in milliseconds
  */
 export const modelConfig = {
-  modelName: 'gpt-4o-mini-2024-07-18',
+  modelName: 'gpt-4o',
   temperature: 0.7,
   maxTokens: 8192,
   contextWindow: 128000,
+  timeoutMs: 30000,
+  maxRetries: 3,
+  retryDelay: 1000,
 } as const;
 
 /**
@@ -38,9 +44,14 @@ You format code blocks and technical content appropriately.`;
  * @property openAIApiKey - API key for OpenAI services (from environment variables)
  * @property model - Fixed model configuration settings
  * @property defaultPrompt - Default system prompt for the AI
+ * @property development - Development-specific settings
  */
 export const aiConfig = {
   openAIApiKey: import.meta.env.VITE_OPENAI_API_KEY,
   model: modelConfig,
   defaultPrompt: defaultSystemPrompt,
+  development: {
+    debugMode: import.meta.env.DEV,
+    logLevel: import.meta.env.DEV ? 'debug' : 'error',
+  }
 } as const; 
