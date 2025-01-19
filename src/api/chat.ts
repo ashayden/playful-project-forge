@@ -111,20 +111,27 @@ export async function POST(request: Request) {
         let fullResponse = '';
         try {
           for await (const chunk of stream) {
-            const content = typeof chunk.content === 'string' 
-              ? chunk.content 
-              : JSON.stringify(chunk.content);
+            // Ensure chunk content is a string
+            const content = chunk.content?.toString() || '';
             fullResponse += content;
-            controller.enqueue(encoder.encode(content));
+            
+            // Encode as a proper SSE message
+            const message = `data: ${JSON.stringify({ content })}\n\n`;
+            controller.enqueue(encoder.encode(message));
             
             // Update assistant message in database
-            await supabase
-              .from('messages')
-              .update({ content: fullResponse })
-              .eq('id', assistantMessage.id);
+            if (content.trim()) {  // Only update if there's actual content
+              await supabase
+                .from('messages')
+                .update({ content: fullResponse })
+                .eq('id', assistantMessage.id);
+            }
           }
+          // Send a completion message
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         } catch (error) {
+          logger.error('Streaming error:', error);
           controller.error(error);
         }
       },
@@ -136,12 +143,13 @@ export async function POST(request: Request) {
       .update({ has_response: true })
       .eq('id', conversationId);
 
-    // Return streaming response
+    // Return streaming response with correct headers
     return new Response(readable, {
       headers: { 
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'  // Prevent proxy buffering
       }
     });
 
