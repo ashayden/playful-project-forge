@@ -10,7 +10,7 @@ import { ChatInput } from './ChatInput';
 import { TypingIndicator } from './TypingIndicator';
 
 export function ChatInterface() {
-  const { messages, sendMessage, isSending, isStreaming } = useChat();
+  const { messages, isSending, isStreaming } = useChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -47,12 +47,7 @@ export function ChatInterface() {
           <div ref={messagesEndRef} />
         </div>
       </div>
-
-      <div className="border-t border-border bg-background p-4">
-        <div className="max-w-3xl mx-auto">
-          <ChatInput onSend={sendMessage} disabled={isSending} />
-        </div>
-      </div>
+      <ChatInput />
     </div>
   );
 } 

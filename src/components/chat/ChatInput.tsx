@@ -1,36 +1,29 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { SendHorizontal } from 'lucide-react';
+import { useChat } from '@/hooks/useChat';
 
-interface ChatInputProps {
-  onSend: (message: string) => void;
-  disabled?: boolean;
-  className?: string;
-}
-
-export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
-  const [input, setInput] = useState('');
+export function ChatInput() {
+  const { sendMessage, isSending } = useChat();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [value, setValue] = useState('');
 
-  // Keep focus on textarea after submission
   useEffect(() => {
-    if (!disabled) {
-      textareaRef.current?.focus();
+    if (textareaRef.current && !isSending) {
+      textareaRef.current.focus();
     }
-  }, [disabled]);
+  }, [isSending]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || disabled) return;
-    
+    if (!value.trim() || isSending) return;
+
     try {
-      await onSend(input);
-      setInput('');
-      textareaRef.current?.focus();
+      await sendMessage(value.trim());
+      setValue(''); // Clear input after successful submission
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Failed to send message:', error);
     }
   };
 
@@ -42,39 +35,23 @@ export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
   };
 
   return (
-    <form 
-      onSubmit={handleSubmit} 
-      className={cn(
-        "flex gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
-        className
-      )}
-    >
+    <form onSubmit={handleSubmit} className="flex items-end gap-2 p-4 border-t">
       <Textarea
         ref={textareaRef}
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Send a message..."
-        disabled={disabled}
+        placeholder="Type a message..."
         rows={1}
-        className={cn(
-          "flex-1 min-h-[2.5rem] resize-none",
-          "focus-visible:ring-1 focus-visible:ring-ring",
-          "placeholder:text-muted-foreground"
-        )}
+        className="min-h-[44px] resize-none"
+        disabled={isSending}
       />
-      <Button
-        type="submit"
-        size="icon"
-        disabled={disabled || !input.trim()}
-        className={cn(
-          "h-10 w-10",
-          "transition-opacity",
-          (!input.trim() || disabled) && "opacity-50"
-        )}
+      <Button 
+        type="submit" 
+        size="icon" 
+        disabled={isSending || !value.trim()}
       >
-        <SendHorizontal className="h-5 w-5" />
-        <span className="sr-only">Send message</span>
+        <SendHorizontal className="h-4 w-4" />
       </Button>
     </form>
   );
