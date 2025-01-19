@@ -10,7 +10,22 @@ import { Message } from '@/types/ai';
 
 export async function POST(request: Request) {
   try {
+    // Validate request
+    if (!request.body) {
+      return new Response(
+        JSON.stringify({ error: 'Missing request body' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { message } = await request.json();
+    
+    if (!message || typeof message !== 'string') {
+      return new Response(
+        JSON.stringify({ error: 'Invalid message format' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Save user message
     const { error: saveError } = await supabase
@@ -19,18 +34,19 @@ export async function POST(request: Request) {
 
     if (saveError) {
       logger.error('Error saving user message:', saveError);
-      return new Response('Error saving user message', { status: 500 });
+      throw new Error('Failed to save user message');
     }
 
     // Get conversation history
     const { data: historyData, error: historyError } = await supabase
       .from('messages')
       .select('*')
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .limit(10); // Limit context window
 
     if (historyError) {
       logger.error('Error fetching history:', historyError);
-      return new Response('Error fetching history', { status: 500 });
+      throw new Error('Failed to fetch conversation history');
     }
 
     // Convert history to Message format
@@ -40,39 +56,19 @@ export async function POST(request: Request) {
       timestamp: new Date(msg.created_at).getTime()
     }));
 
-    // Process the message
-    const response = await sendChatMessage(message, formattedHistory);
-
-    // Insert assistant message
-    const { error: assistantError } = await supabase
-      .from('messages')
-      .insert([{ content: response, type: 'assistant' }]);
-
-    if (assistantError) {
-      logger.error('Error saving assistant message:', assistantError);
-      return new Response('Error saving assistant message', { status: 500 });
-    }
-
-    return new Response(JSON.stringify({ response }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    logger.error('Error in chat API:', error);
-    return new Response('Internal Server Error', { status: 500 });
-  }
-}
-
-export async function sendChatMessage(message: string, history: Message[]) {
-  try {
+    // Initialize AI model
     const model = new ChatOpenAI({
       modelName: 'gpt-4o',
       temperature: 0.7,
-      streaming: true,
+      streaming: false,
+      maxRetries: 3,
+      timeout: 60000, // 60 second timeout
     });
 
+    // Prepare messages
     const messages = [
       new SystemMessage("You are a helpful AI assistant. Be concise and clear in your responses."),
-      ...history.map(msg => 
+      ...formattedHistory.map(msg => 
         msg.role === 'user' 
           ? new HumanMessage(msg.content)
           : new AIMessage(msg.content)
@@ -80,10 +76,38 @@ export async function sendChatMessage(message: string, history: Message[]) {
       new HumanMessage(message)
     ];
 
+    // Get AI response
     const response = await model.invoke(messages);
-    return response.content;
+    if (!response?.content) {
+      throw new Error('No response received from AI model');
+    }
+
+    // Save AI response
+    const { error: assistantError } = await supabase
+      .from('messages')
+      .insert([{ content: response.content, type: 'assistant' }]);
+
+    if (assistantError) {
+      logger.error('Error saving assistant message:', assistantError);
+      throw new Error('Failed to save assistant response');
+    }
+
+    // Return successful response
+    return new Response(
+      JSON.stringify({ 
+        response: response.content,
+        success: true 
+      }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   } catch (error) {
-    logger.error('Error in sendChatMessage:', error);
-    throw error;
+    logger.error('Error in chat API:', error);
+    return new Response(
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Internal Server Error',
+        success: false 
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 } 

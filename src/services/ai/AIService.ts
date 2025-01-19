@@ -2,7 +2,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { 
   ChatPromptTemplate, 
   MessagesPlaceholder, 
-  HumanMessagePromptTemplate 
+  HumanMessagePromptTemplate
 } from '@langchain/core/prompts';
 import { RunnableSequence } from '@langchain/core/runnables';
 import { StringOutputParser } from '@langchain/core/output_parsers';

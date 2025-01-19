@@ -47,6 +47,9 @@ export default defineConfig(({ command, mode }) => {
       // Asset optimization
       assetsInlineLimit: 4096, // 4kb
       reportCompressedSize: false,
+      commonjsOptions: {
+        include: [/@langchain\/.*/, /node_modules/],
+      }
     },
     optimizeDeps: {
       include: [
@@ -56,7 +59,9 @@ export default defineConfig(({ command, mode }) => {
         '@radix-ui/react-dialog',
         '@radix-ui/react-dropdown-menu',
         '@langchain/openai',
+        '@langchain/core/messages',
       ],
+      exclude: []
     },
     server: {
       port: 3000,

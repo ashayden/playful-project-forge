@@ -15,16 +15,19 @@ interface State {
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = { hasError: false, error: null };
+  public state: State = {
+    hasError: false,
+    error: null
+  };
+
+  public static getDerivedStateFromError(error: Error): State {
+    return {
+      hasError: true,
+      error
+    };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     logger.error('Error caught by boundary:', {
       error,
       componentStack: errorInfo.componentStack,
@@ -32,11 +35,14 @@ export class ErrorBoundary extends React.Component<Props, State> {
     this.props.onError?.(error);
   }
 
-  private handleRetry = () => {
-    this.setState({ hasError: false, error: null });
+  private handleRetry = (): void => {
+    this.setState({
+      hasError: false,
+      error: null
+    });
   };
 
-  render() {
+  public render(): React.ReactNode {
     if (this.state.hasError) {
       if (this.props.fallback) {
         return this.props.fallback;
