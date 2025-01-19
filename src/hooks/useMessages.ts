@@ -3,12 +3,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { Message } from '@/types/messages';
 import { logger } from '@/services/loggingService';
 import { useConversations } from './useConversations';
+import { ChatService } from '@/services/ai/ChatService';
+import { useState } from 'react';
 
 const MESSAGES_KEY = 'messages';
+const chatService = new ChatService();
 
 export function useMessages(conversationId: string) {
   const queryClient = useQueryClient();
   const { updateConversation } = useConversations();
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
 
   const { data: messages = [], isLoading, error } = useQuery({
     queryKey: [MESSAGES_KEY, conversationId],
@@ -64,71 +69,75 @@ export function useMessages(conversationId: string) {
         throw userError;
       }
 
+      // Create empty assistant message
+      const { data: assistantMessage, error: assistantError } = await supabase
+        .from('messages')
+        .insert([{
+          content: '',
+          role: 'assistant',
+          conversation_id: conversationId,
+          user_id: null
+        }])
+        .select()
+        .single();
+
+      if (assistantError) {
+        logger.error('Error creating assistant message:', assistantError);
+        throw assistantError;
+      }
+
+      setIsStreaming(true);
+      setStreamingMessageId(assistantMessage.id);
+
       try {
-        // Call OpenAI API
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o',
-            messages: [
-              ...messages.map(msg => ({
-                role: msg.role,
-                content: msg.content
-              })),
-              { role: 'user', content }
-            ],
-            temperature: 0.7,
-            stream: false
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`OpenAI API error: ${response.statusText}`);
-        }
-
-        const aiResponse = await response.json();
-        const aiContent = aiResponse.choices[0].message.content;
-
-        // Save AI response to database
-        const { data: aiMessage, error: aiError } = await supabase
+        let streamedContent = '';
+        
+        // Get all messages for context
+        const { data: messageHistory } = await supabase
           .from('messages')
-          .insert([{
-            content: aiContent,
-            role: 'assistant',
-            conversation_id: conversationId,
-            user_id: user.id
-          }])
-          .select()
-          .single();
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .order('created_at', { ascending: true });
 
-        if (aiError) {
-          logger.error('Error saving AI message:', aiError);
-          throw aiError;
-        }
+        // Process message with streaming
+        await chatService.processMessageStream(
+          messageHistory || [],
+          {
+            onToken: async (token) => {
+              streamedContent += token;
+              // Update message in real-time
+              await supabase
+                .from('messages')
+                .update({ content: streamedContent })
+                .eq('id', assistantMessage.id);
+            },
+            onComplete: async () => {
+              setIsStreaming(false);
+              setStreamingMessageId(null);
+              // Mark conversation as having a response
+              await updateConversation({ id: conversationId, hasResponse: true });
+            },
+            onError: (error) => {
+              logger.error('Error in AI stream:', error);
+              throw error;
+            }
+          }
+        );
 
-        // Mark conversation as having a response
-        await updateConversation({ id: conversationId, hasResponse: true });
-
-        return [userMessage, aiMessage] as Message[];
+        return [userMessage, { ...assistantMessage, content: streamedContent }] as Message[];
       } catch (error) {
-        logger.error('Error getting AI response:', error);
-        // Insert error message
-        const { data: errorMessage } = await supabase
+        logger.error('Error in streaming response:', error);
+        // Update message with error
+        await supabase
           .from('messages')
-          .insert([{
+          .update({
             content: 'Sorry, I encountered an error while processing your request. Please try again.',
-            role: 'assistant',
-            conversation_id: conversationId,
-            user_id: user.id
-          }])
-          .select()
-          .single();
+          })
+          .eq('id', assistantMessage.id);
 
-        return [userMessage, errorMessage] as Message[];
+        setIsStreaming(false);
+        setStreamingMessageId(null);
+        throw error;
       }
     },
     onSuccess: (newMessages) => {
@@ -171,7 +180,7 @@ export function useMessages(conversationId: string) {
       await deleteMessage.mutateAsync(messageId);
     },
     isSending: sendMessage.isPending,
-    isStreaming: false, // TODO: Implement streaming
-    streamingMessageId: null, // TODO: Implement streaming
+    isStreaming,
+    streamingMessageId,
   };
 } 

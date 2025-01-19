@@ -1,4 +1,4 @@
-import { Plus, MessageSquare, Settings, Trash2 } from 'lucide-react';
+import { Plus, MessageSquare, Settings, Trash2, RefreshCcw } from 'lucide-react';
 import { useChat } from '@/hooks/useChat';
 import { cn } from '@/lib/utils';
 import { Conversation } from '@/types/chat';
@@ -26,6 +26,7 @@ export function ConversationSidebar() {
     isCreating,
     deleteConversation,
     isDeleting,
+    clearAllConversations
   } = useChat();
 
   // Filter out conversations without responses unless they're the current conversation
@@ -89,6 +90,20 @@ export function ConversationSidebar() {
 
         <SidebarFooter className="h-10 min-h-[2.5rem] px-2">
           <div className="flex items-center justify-between h-full">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-7 w-7"
+                  onClick={clearAllConversations}
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  <span className="sr-only">Clear All Chats</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Clear All Chats</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-7 w-7">

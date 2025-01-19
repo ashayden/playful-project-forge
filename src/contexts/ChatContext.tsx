@@ -24,6 +24,7 @@ export type ChatContextType = {
   isStreaming: boolean;
   streamingMessageId: string | null;
   setCurrentConversation: (conversation: Conversation) => void;
+  clearAllConversations: () => Promise<void>;
 };
 
 export const ChatContext = createContext<ChatContextType | null>(null);
@@ -150,6 +151,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     isStreaming,
     streamingMessageId,
     setCurrentConversation,
+    clearAllConversations: async () => {
+      // Implementation of clearAllConversations function
+    },
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

@@ -67,20 +67,22 @@ function ChatInterface() {
   const { messages, sendMessage, isSending, isStreaming } = useChat();
 
   return (
-    <div className="h-screen p-4 flex flex-col">
-      <main className="flex-1 overflow-y-auto space-y-4 mb-4">
-        {messages.map((message) => (
-          <ChatMessage
-            key={message.id}
-            message={message}
-            isStreaming={isStreaming && message.id === messages[messages.length - 1]?.id}
-          />
-        ))}
-      </main>
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="space-y-4">
+          {messages.map((message) => (
+            <ChatMessage
+              key={message.id}
+              message={message}
+              isStreaming={isStreaming && message.id === messages[messages.length - 1]?.id}
+            />
+          ))}
+        </div>
+      </div>
 
-      <footer>
+      <div className="border-t border-gray-700 bg-gray-900 p-4">
         <ChatInput onSend={sendMessage} disabled={isSending} />
-      </footer>
+      </div>
     </div>
   );
 }
