@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { ChatOpenAI } from '@langchain/openai';
+import { BaseMessage } from '@langchain/core/messages';
 import { 
   SystemMessage,
   HumanMessage,
