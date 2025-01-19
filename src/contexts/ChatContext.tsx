@@ -144,6 +144,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     if (!currentConversation) return;
     
     setIsSending(true);
+    let tempUserMessage: Message | null = null;
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -153,7 +154,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       }
 
       // Create temporary user message for immediate display
-      const tempUserMessage: Message = {
+      tempUserMessage = {
         id: crypto.randomUUID(),
         role: 'user',
         content,
@@ -163,39 +164,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       };
       
       // Immediately update UI with user message
-      setMessages((prev: Message[]) => [...prev, tempUserMessage]);
-
-      // Insert user message into database
-      const { data: userMessageData, error: userMessageError } = await supabase
-        .from('messages')
-        .insert([{
-          role: 'user',
-          content,
-          conversation_id: currentConversation.id,
-          user_id: user.id
-        }])
-        .select()
-        .single();
-      
-      if (userMessageError) throw userMessageError;
-      
-      // Update the temporary message with the real one from the database
-      setMessages((prev: Message[]) => prev.map(msg => 
-        msg.id === tempUserMessage.id ? userMessageData : msg
-      ));
-
-      // Create placeholder for assistant message
-      setIsStreaming(true);
-      const placeholderId = crypto.randomUUID();
-      const placeholderMessage: Message = {
-        id: placeholderId,
-        role: 'assistant',
-        content: '',
-        conversation_id: currentConversation.id,
-        created_at: new Date().toISOString()
-      };
-      
-      setMessages((prev: Message[]) => [...prev, placeholderMessage]);
+      setMessages((prev: Message[]) => [...prev, tempUserMessage!]);
 
       // Get auth token for API call
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -214,30 +183,30 @@ export function ChatProvider({ children }: ChatProviderProps) {
         })
       });
 
-      if (!response.ok) throw new Error('Failed to get assistant response');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API Error: ${errorText}`);
+      }
 
       const responseText = await response.text();
 
-      const { data: assistantMessageData, error: assistantMessageError } = await supabase
+      // Fetch updated messages to ensure we have the correct IDs from the database
+      const { data: updatedMessages, error: messagesError } = await supabase
         .from('messages')
-        .insert([{
-          role: 'assistant',
-          content: responseText,
-          conversation_id: currentConversation.id,
-          user_id: user.id
-        }])
-        .select()
-        .single();
-      
-      if (assistantMessageError) throw assistantMessageError;
+        .select('*')
+        .eq('conversation_id', currentConversation.id)
+        .order('created_at', { ascending: true });
 
-      setMessages((prev: Message[]) => [
-        ...prev.filter(m => m.id !== placeholderId),
-        assistantMessageData
-      ]);
+      if (messagesError) throw messagesError;
+      
+      setMessages(updatedMessages || []);
 
     } catch (error) {
       logger.error('Failed to send message:', error);
+      // Remove the temporary message on error
+      if (tempUserMessage) {
+        setMessages((prev: Message[]) => prev.filter(m => m.id !== tempUserMessage!.id));
+      }
       throw error;
     } finally {
       setIsSending(false);
