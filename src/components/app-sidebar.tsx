@@ -8,7 +8,7 @@
  */
 
 import * as React from "react"
-import { MessageSquare, Plus, Trash2 } from "lucide-react"
+import { MessageSquare, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react"
 import { useChat } from "@/hooks/useChat"
 import {
   Sidebar,
@@ -23,6 +23,11 @@ import {
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { 
@@ -34,6 +39,36 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     isCreating, 
     isDeleting 
   } = useChat()
+
+  const [isOpen, setIsOpen] = React.useState(false)
+  const recentConversations = conversations.slice(0, 5)
+  const olderConversations = conversations.slice(5)
+
+  const ConversationItem = React.memo(({ chat }: { chat: typeof conversations[0] }) => (
+    <SidebarMenuItem key={chat.id} className="group">
+      <SidebarMenuButton
+        onClick={() => setCurrentConversation(chat)}
+        isActive={currentConversation?.id === chat.id}
+      >
+        <MessageSquare className="mr-2 h-4 w-4" />
+        <span className="truncate">{chat.title || 'New Chat'}</span>
+      </SidebarMenuButton>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="opacity-0 group-hover:opacity-100 absolute right-2 top-1/2 -translate-y-1/2"
+        onClick={(e) => {
+          e.stopPropagation()
+          deleteConversation(chat.id)
+        }}
+        disabled={isDeleting}
+        title="Delete chat"
+      >
+        <Trash2 className="h-4 w-4" />
+        <span className="sr-only">Delete chat</span>
+      </Button>
+    </SidebarMenuItem>
+  ))
 
   return (
     <Sidebar {...props}>
@@ -55,31 +90,34 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
-                {conversations.map((chat) => (
-                  <SidebarMenuItem key={chat.id} className="group">
-                    <SidebarMenuButton
-                      onClick={() => setCurrentConversation(chat)}
-                      isActive={currentConversation?.id === chat.id}
-                    >
-                      <MessageSquare className="mr-2 h-4 w-4" />
-                      <span className="truncate">{chat.title || 'New Chat'}</span>
-                    </SidebarMenuButton>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="opacity-0 group-hover:opacity-100 absolute right-2 top-1/2 -translate-y-1/2"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        deleteConversation(chat.id)
-                      }}
-                      disabled={isDeleting}
-                      title="Delete chat"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Delete chat</span>
-                    </Button>
-                  </SidebarMenuItem>
+                {recentConversations.map((chat) => (
+                  <ConversationItem key={chat.id} chat={chat} />
                 ))}
+
+                {olderConversations.length > 0 && (
+                  <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className="w-full flex justify-between items-center px-2 py-1"
+                      >
+                        <span className="text-sm font-medium">
+                          {isOpen ? 'Show Less' : `${olderConversations.length} More Chats`}
+                        </span>
+                        {isOpen ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      {olderConversations.map((chat) => (
+                        <ConversationItem key={chat.id} chat={chat} />
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

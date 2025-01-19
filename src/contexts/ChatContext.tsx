@@ -22,35 +22,35 @@ export function ChatProvider({ children }: ChatProviderProps) {
   const [isSending, setIsSending] = useState<boolean>(false);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
 
-  // Fetch initial conversations
+  // Create a new chat when user logs in and no conversations exist
   useEffect(() => {
-    const fetchConversations = async () => {
+    const checkAndCreateChat = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        
-        if (!user?.id) {
-          logger.error('No authenticated user found');
-          return;
-        }
+        if (!user) return;
 
-        const { data, error } = await supabase
+        const { data: existingConversations, error } = await supabase
           .from('conversations')
           .select('*')
-          .eq('user_id', user.id)
           .order('created_at', { ascending: false });
-        
+
         if (error) {
           logger.error('Error fetching conversations:', error);
           return;
         }
 
-        setConversations(data || []);
+        if (!existingConversations?.length) {
+          await createConversation('New Chat');
+        } else {
+          setConversations(existingConversations);
+          setCurrentConversation(existingConversations[0]);
+        }
       } catch (error) {
-        logger.error('Failed to fetch conversations:', error);
+        logger.error('Error checking/creating initial chat:', error);
       }
     };
 
-    fetchConversations();
+    checkAndCreateChat();
   }, []);
 
   // Fetch messages when conversation changes
@@ -77,6 +77,47 @@ export function ChatProvider({ children }: ChatProviderProps) {
     };
 
     fetchMessages();
+  }, [currentConversation?.id]);
+
+  // Delete empty conversations
+  useEffect(() => {
+    const deleteEmptyConversations = async () => {
+      try {
+        const { data: emptyConversations, error: fetchError } = await supabase
+          .from('conversations')
+          .select('id')
+          .not('id', 'in', (
+            supabase
+              .from('messages')
+              .select('conversation_id')
+          ));
+
+        if (fetchError) {
+          logger.error('Error fetching empty conversations:', fetchError);
+          return;
+        }
+
+        if (emptyConversations?.length) {
+          const { error: deleteError } = await supabase
+            .from('conversations')
+            .delete()
+            .in('id', emptyConversations.map(c => c.id));
+
+          if (deleteError) {
+            logger.error('Error deleting empty conversations:', deleteError);
+          }
+        }
+      } catch (error) {
+        logger.error('Error cleaning up empty conversations:', error);
+      }
+    };
+
+    // Run cleanup when component unmounts or conversation changes
+    return () => {
+      if (currentConversation?.id) {
+        deleteEmptyConversations();
+      }
+    };
   }, [currentConversation?.id]);
 
   const createConversation = useCallback(async (title: string) => {
@@ -144,6 +185,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     if (!currentConversation) return;
     
     setIsSending(true);
+    setIsStreaming(true);
     let tempUserMessage: Message | null = null;
     
     try {
@@ -170,7 +212,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) throw sessionError;
 
-      // Call API
+      // Call API with streaming
       const response = await fetch(`${window.location.origin}/api/chat`, {
         method: 'POST',
         headers: {
@@ -188,7 +230,45 @@ export function ChatProvider({ children }: ChatProviderProps) {
         throw new Error(`API Error: ${errorText}`);
       }
 
-      // Fetch updated messages to ensure we have the correct IDs from the database
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response stream available');
+      }
+
+      // Create temporary assistant message
+      const tempAssistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: '',
+        conversation_id: currentConversation.id,
+        user_id: undefined,
+        created_at: new Date().toISOString()
+      };
+
+      setMessages(prev => [...prev, tempAssistantMessage]);
+
+      // Process the stream
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          break;
+        }
+
+        const chunk = decoder.decode(value);
+        
+        // Update the assistant message with new content
+        setMessages(prev => prev.map(msg => 
+          msg.id === tempAssistantMessage.id
+            ? { ...msg, content: msg.content + chunk }
+            : msg
+        ));
+      }
+
+      // Fetch final messages to ensure we have the correct IDs from the database
       const { data: updatedMessages, error: messagesError } = await supabase
         .from('messages')
         .select('*')
