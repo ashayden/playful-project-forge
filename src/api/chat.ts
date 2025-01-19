@@ -111,27 +111,53 @@ export async function POST(request: Request) {
         let fullResponse = '';
         try {
           for await (const chunk of stream) {
-            // Ensure chunk content is a string
-            const content = chunk.content?.toString() || '';
-            fullResponse += content;
-            
-            // Encode as a proper SSE message
-            const message = `data: ${JSON.stringify({ content })}\n\n`;
-            controller.enqueue(encoder.encode(message));
-            
-            // Update assistant message in database
-            if (content.trim()) {  // Only update if there's actual content
+            // Ensure chunk content is a string and handle different response formats
+            let content = '';
+            if (typeof chunk.content === 'string') {
+              content = chunk.content;
+            } else if (Array.isArray(chunk.content)) {
+              content = chunk.content
+                .map(c => typeof c === 'string' ? c : JSON.stringify(c))
+                .join('');
+            } else if (chunk.content) {
+              content = JSON.stringify(chunk.content);
+            }
+
+            if (content.trim()) {
+              fullResponse += content;
+              
+              // Encode as a proper SSE message
+              const message = `data: ${JSON.stringify({ content })}\n\n`;
+              controller.enqueue(encoder.encode(message));
+              
+              // Update assistant message in database
               await supabase
                 .from('messages')
                 .update({ content: fullResponse })
                 .eq('id', assistantMessage.id);
             }
           }
+
+          // Ensure final message is saved
+          if (fullResponse.trim()) {
+            await supabase
+              .from('messages')
+              .update({ content: fullResponse })
+              .eq('id', assistantMessage.id);
+          }
+
           // Send a completion message
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         } catch (error) {
           logger.error('Streaming error:', error);
+          // Try to save any partial response
+          if (fullResponse.trim()) {
+            await supabase
+              .from('messages')
+              .update({ content: fullResponse })
+              .eq('id', assistantMessage.id);
+          }
           controller.error(error);
         }
       },

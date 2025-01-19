@@ -97,6 +97,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
         const { data: existingConversations, error } = await supabase
           .from('conversations')
           .select('*')
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false });
 
         if (error) {
@@ -104,18 +105,45 @@ export function ChatProvider({ children }: ChatProviderProps) {
           return;
         }
 
+        setConversations(existingConversations || []);
+        
         if (!existingConversations?.length) {
           await createConversation('New Chat');
         } else {
-          setConversations(existingConversations);
           setCurrentConversation(existingConversations[0]);
+          // Fetch messages for the first conversation
+          const { data: messages, error: messagesError } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('conversation_id', existingConversations[0].id)
+            .order('created_at', { ascending: true });
+
+          if (messagesError) {
+            logger.error('Error fetching messages:', messagesError);
+            return;
+          }
+
+          setMessages(messages || []);
         }
       } catch (error) {
         logger.error('Error checking/creating initial chat:', error);
       }
     };
 
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        checkAndCreateChat();
+      }
+    });
+
+    // Initial check
     checkAndCreateChat();
+
+    // Cleanup
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Fetch messages when conversation changes
@@ -321,29 +349,39 @@ export function ChatProvider({ children }: ChatProviderProps) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        messageStreamRef.current += chunk;
-
-        // Update the temporary message with accumulated content
-        setMessages((prev) => {
-          const updated = [...prev];
-          const lastMessage = updated[updated.length - 1];
-          if (lastMessage && lastMessage.id === tempAssistantMessage.id) {
-            lastMessage.content = messageStreamRef.current;
+        const text = decoder.decode(value);
+        const lines = text.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              break;
+            }
+            
+            try {
+              const { content } = JSON.parse(data);
+              if (content) {
+                messageStreamRef.current += content;
+                
+                // Update the temporary message with accumulated content
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const lastMessage = updated[updated.length - 1];
+                  if (lastMessage && lastMessage.id === tempAssistantMessage.id) {
+                    lastMessage.content = messageStreamRef.current;
+                  }
+                  return updated;
+                });
+              }
+            } catch (e) {
+              logger.error('Error parsing stream data:', e);
+            }
           }
-          return updated;
-        });
+        }
       }
 
-      // Save the complete assistant message to database
-      await supabase
-        .from('messages')
-        .insert([{
-          role: 'assistant',
-          content: messageStreamRef.current,
-          conversation_id: currentConversation.id,
-          user_id: user.id
-        }]);
+      // Final update will come through the real-time subscription
 
     } catch (error) {
       logger.error('Failed to send message:', error);
