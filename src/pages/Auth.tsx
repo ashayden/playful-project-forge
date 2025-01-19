@@ -60,11 +60,13 @@ const Auth = () => {
   }, [navigate, toast]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background">
-      <div className="w-full max-w-[400px] px-4">
-        <h1 className="text-4xl font-bold text-center mb-2 text-foreground">Chat Assistant</h1>
-        <p className="text-muted-foreground text-center mb-8">React + TypeScript, LangChain, Supabase</p>
-        <div className="bg-card border-border border rounded-lg p-4 shadow-lg">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+      <div className="w-full max-w-[400px] space-y-6">
+        <div className="space-y-2 text-center">
+          <h1 className="text-4xl font-bold tracking-tight text-foreground">Chat Assistant</h1>
+          <p className="text-muted-foreground">React + TypeScript, LangChain, Supabase</p>
+        </div>
+        <div className="bg-card border-border border rounded-lg p-6 shadow-lg">
           <SupabaseAuth 
             supabaseClient={supabase}
             appearance={{
@@ -83,6 +85,15 @@ const Auth = () => {
                     inputBorderFocus: 'hsl(var(--ring))',
                     inputText: 'hsl(var(--foreground))',
                     dividerBackground: 'hsl(var(--border))',
+                    anchorTextColor: 'hsl(var(--primary))',
+                    anchorTextHoverColor: 'hsl(var(--primary))',
+                  },
+                  space: {
+                    inputPadding: '16px',
+                    buttonPadding: '16px',
+                    spaceSmall: '16px',
+                    spaceMedium: '24px',
+                    spaceLarge: '32px',
                   },
                   fonts: {
                     bodyFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
@@ -90,33 +101,53 @@ const Auth = () => {
                     inputFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
                     labelFontFamily: `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`,
                   },
+                  borderWidths: {
+                    buttonBorderWidth: '1px',
+                    inputBorderWidth: '1px',
+                  },
+                  radii: {
+                    borderRadiusButton: 'var(--radius)',
+                    buttonBorderRadius: 'var(--radius)',
+                    inputBorderRadius: 'var(--radius)',
+                  },
                 },
               },
               style: {
                 button: {
-                  borderRadius: 'var(--radius)',
-                  padding: '10px 15px',
+                  padding: '16px',
                   fontSize: '14px',
                   fontWeight: '500',
+                  height: 'auto',
+                  marginTop: '24px',
+                  marginBottom: '24px',
                 },
                 input: {
-                  borderRadius: 'var(--radius)',
-                  padding: '10px 15px',
+                  padding: '16px',
                   fontSize: '14px',
+                  marginBottom: '16px',
                 },
                 label: {
                   fontSize: '14px',
-                  marginBottom: '4px',
-                  color: 'hsl(var(--muted-foreground))',
+                  marginBottom: '8px',
+                  color: 'hsl(var(--foreground))',
+                  fontWeight: '500',
                 },
                 message: {
                   fontSize: '14px',
-                  marginBottom: '12px',
+                  padding: '12px',
+                  marginBottom: '16px',
+                  borderRadius: 'var(--radius)',
                 },
                 anchor: {
                   color: 'hsl(var(--primary))',
                   fontSize: '14px',
                   textDecoration: 'none',
+                  fontWeight: '500',
+                  marginTop: '16px',
+                  display: 'inline-block',
+                },
+                container: {
+                  gap: '24px',
                 },
               },
             }}
