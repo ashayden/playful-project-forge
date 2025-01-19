@@ -1,8 +1,7 @@
 import { useContext, useCallback } from 'react';
 import { ChatContext, ChatContextType } from '../contexts/ChatContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Conversation } from '@/types/chat';
+import { useQueryClient } from '@tanstack/react-query';
 import { logger } from '@/services/loggingService';
 
 export function useChat(): ChatContextType {

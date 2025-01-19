@@ -5,6 +5,7 @@ import { useMessages } from '@/hooks/useMessages';
 import { useConversations } from '@/hooks/useConversations';
 import { useAuth } from '@/hooks/useAuth';
 import { logger } from '@/services/loggingService';
+import { supabase } from '@/integrations/supabase/client';
 
 export type ChatContextType = {
   currentConversation: Conversation | null;
@@ -152,7 +153,29 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     streamingMessageId,
     setCurrentConversation,
     clearAllConversations: async () => {
-      // Implementation of clearAllConversations function
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user?.id) {
+          throw new Error('User not authenticated');
+        }
+
+        const { error } = await supabase
+          .from('conversations')
+          .delete()
+          .eq('user_id', user.id);
+        
+        if (error) {
+          logger.error('Error clearing conversations:', error);
+          throw error;
+        }
+
+        // Reset current conversation
+        setCurrentConversation(null);
+      } catch (err) {
+        logger.error('Failed to clear conversations:', err);
+        throw err;
+      }
     },
   };
 
