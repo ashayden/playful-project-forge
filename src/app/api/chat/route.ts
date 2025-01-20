@@ -2,17 +2,21 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { AI_CONFIG } from '@/config/ai.config';
 
-// In Edge runtime, we need to use VITE_ prefixed variables
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
-const OPENAI_API_KEY = process.env.VITE_OPENAI_API_KEY;
+// Get environment variables
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !OPENAI_API_KEY) {
   throw new Error('Missing required environment variables');
 }
 
 // Create Supabase client
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: false, // API routes don't need session persistence
+  },
+});
 
 // Create OpenAI client
 const openai = new OpenAI({
