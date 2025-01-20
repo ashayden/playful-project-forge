@@ -1,18 +1,18 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
 
-export default function AuthCallback() {
-  const router = useRouter();
+export function AuthCallback() {
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   useEffect(() => {
     if (user) {
-      router.push('/chat');
+      navigate('/chat');
     }
-  }, [user, router]);
+  }, [user, navigate]);
 
   return (
     <div className="flex min-h-screen items-center justify-center">

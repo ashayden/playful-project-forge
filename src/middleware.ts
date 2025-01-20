@@ -1,30 +1,34 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { Request, Response, NextFunction } from 'express';
 
-export async function middleware(request: NextRequest) {
-  const res = NextResponse.next();
-  const supabase = createMiddlewareClient({ req: request, res });
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL!,
+  process.env.VITE_SUPABASE_ANON_KEY!
+);
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
 
-  // If the user is not signed in and the current path is not /auth,
-  // redirect to /auth
-  if (!session && !request.nextUrl.pathname.startsWith('/auth')) {
-    const redirectUrl = new URL('/auth', request.url);
-    return NextResponse.redirect(redirectUrl);
+    // If the user is not signed in and the current path is not /auth,
+    // redirect to /auth
+    if (!session && !req.path.startsWith('/auth')) {
+      return res.redirect('/auth');
+    }
+
+    // If the user is signed in and the current path is /auth,
+    // redirect to /chat
+    if (session && req.path.startsWith('/auth')) {
+      return res.redirect('/chat');
+    }
+
+    // Add session to request for use in route handlers
+    req.session = session;
+    next();
+  } catch (error) {
+    console.error('Auth middleware error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  // If the user is signed in and the current path is /auth,
-  // redirect to /chat
-  if (session && request.nextUrl.pathname.startsWith('/auth')) {
-    const redirectUrl = new URL('/chat', request.url);
-    return NextResponse.redirect(redirectUrl);
-  }
-
-  return res;
 }
 
 export const config = {

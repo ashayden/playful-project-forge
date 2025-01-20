@@ -1,25 +1,28 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import { Request, Response } from 'express';
+
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL!,
+  process.env.VITE_SUPABASE_ANON_KEY!
+);
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.VITE_OPENAI_API_KEY,
 });
 
-export async function POST(req: Request) {
+export async function handleChatRequest(req: Request, res: Response) {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
     const { data: { session } } = await supabase.auth.getSession();
 
     if (!session) {
-      return new NextResponse('Unauthorized', { status: 401 });
+      return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { message, conversationId } = await req.json();
+    const { message, conversationId } = req.body;
 
     if (!message || !conversationId) {
-      return new NextResponse('Missing required fields', { status: 400 });
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
     // Save user message
@@ -34,13 +37,13 @@ export async function POST(req: Request) {
 
     if (messageError) {
       console.error('Error saving user message:', messageError);
-      return new NextResponse('Error saving message', { status: 500 });
+      return res.status(500).json({ error: 'Error saving message' });
     }
 
     // Get conversation history
     const { data: history } = await supabase
       .from('messages')
-      .select('content, role')
+      .select('*')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
 
@@ -102,15 +105,9 @@ export async function POST(req: Request) {
       },
     });
 
-    return new NextResponse(customStream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
+    return res.status(200).json({ success: true });
   } catch (error) {
     console.error('Chat API error:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 } 
