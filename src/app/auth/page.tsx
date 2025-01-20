@@ -1,79 +1,44 @@
 'use client';
 
-import * as React from 'react';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 
-export default function AuthPage() {
-  const { signIn, signUp } = useAuth();
-  const [isSignUp, setIsSignUp] = React.useState(false);
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [error, setError] = React.useState('');
+export function AuthPage() {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    try {
-      if (isSignUp) {
-        await signUp(email, password);
-      } else {
-        await signIn(email, password);
-      }
-      window.location.href = '/';
-    } catch (error) {
-      setError('Authentication failed. Please try again.');
-      console.error('Auth error:', error);
+  useEffect(() => {
+    if (!loading && user) {
+      navigate('/chat');
     }
-  };
+  }, [user, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold">Loading...</h2>
+          <p className="text-sm text-muted-foreground">Please wait</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="w-full max-w-md space-y-8 rounded-lg border bg-card p-6 shadow-lg">
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">
-            {isSignUp ? 'Create an account' : 'Welcome back'}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {isSignUp
-              ? 'Enter your email to create your account'
-              : 'Enter your email to sign in to your account'}
-          </p>
+    <div className="flex h-screen items-center justify-center">
+      <div className="w-full max-w-md space-y-8 px-4">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold">Welcome</h1>
+          <p className="mt-2 text-lg text-muted-foreground">Sign in to continue</p>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <Input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
-          <Button type="submit" className="w-full">
-            {isSignUp ? 'Sign up' : 'Sign in'}
-          </Button>
-        </form>
-        <div className="text-center text-sm">
+        
+        <div className="mt-8 space-y-4">
           <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-primary hover:underline"
+            onClick={() => window.location.href = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/authorize?provider=github`}
+            className="w-full rounded-lg bg-primary px-4 py-2 text-white hover:bg-primary/90"
           >
-            {isSignUp
-              ? 'Already have an account? Sign in'
-              : "Don't have an account? Sign up"}
+            Continue with GitHub
           </button>
         </div>
       </div>
