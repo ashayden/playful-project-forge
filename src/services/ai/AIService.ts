@@ -8,16 +8,18 @@ export class AIService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
         },
         body: JSON.stringify({
           messages,
-          conversationId: 'temp-id', // This should be provided by the caller
+          conversationId: crypto.randomUUID(), // Generate a unique ID for the conversation
         }),
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to get AI response');
+        const errorData = await response.text();
+        console.error('API Error Response:', errorData);
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
       }
 
       if (!response.body) {

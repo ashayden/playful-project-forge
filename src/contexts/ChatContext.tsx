@@ -46,6 +46,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const reader = stream.getReader();
       const decoder = new TextDecoder();
       let assistantMessage = '';
+      let messageId = crypto.randomUUID();
 
       try {
         while (true) {
@@ -68,7 +69,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 // Update the message in real-time
                 setMessages(prev => {
                   const lastMessage = prev[prev.length - 1];
-                  if (lastMessage?.role === 'assistant') {
+                  if (lastMessage?.role === 'assistant' && lastMessage.id === messageId) {
                     return [
                       ...prev.slice(0, -1),
                       { ...lastMessage, content: assistantMessage },
@@ -79,28 +80,40 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                       {
                         role: 'assistant',
                         content: assistantMessage,
-                        id: crypto.randomUUID(),
+                        id: messageId,
                         createdAt: new Date().toISOString(),
                       },
                     ];
                   }
                 });
               } catch (e) {
-                console.error('Error parsing SSE data:', e);
+                console.error('Error parsing SSE data:', e, 'Raw data:', data);
               }
             }
           }
         }
+      } catch (error) {
+        console.error('Error reading stream:', error);
+        throw error;
       } finally {
         reader.releaseLock();
+        setIsStreaming(false);
+        setIsSending(false);
       }
-
-      setIsStreaming(false);
-      setIsSending(false);
     } catch (error) {
-      logger.error('Error in sendMessage:', error);
+      console.error('Error in sendMessage:', error);
       setIsStreaming(false);
       setIsSending(false);
+      // Add the error message to the chat
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'system',
+          content: 'An error occurred while processing your message. Please try again.',
+          id: crypto.randomUUID(),
+          createdAt: new Date().toISOString(),
+        },
+      ]);
     }
   }, [messages, currentConversation]);
 
