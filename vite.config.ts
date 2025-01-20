@@ -17,6 +17,31 @@ export default defineConfig(({ command, mode }) => {
         '@': path.resolve(__dirname, './src'),
       }
     },
+    server: {
+      port: 3000,
+      strictPort: true,
+      hmr: {
+        overlay: true,
+      },
+      proxy: {
+        '/api/chat': {
+          target: 'http://localhost:5173',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, ''),
+          configure: (proxy, _options) => {
+            proxy.on('error', (err, _req, _res) => {
+              console.log('proxy error', err);
+            });
+            proxy.on('proxyReq', (proxyReq, req, _res) => {
+              console.log('Sending Request to the Target:', req.method, req.url);
+            });
+            proxy.on('proxyRes', (proxyRes, req, _res) => {
+              console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+            });
+          },
+        },
+      },
+    },
     build: {
       rollupOptions: {
         output: {
@@ -58,13 +83,6 @@ export default defineConfig(({ command, mode }) => {
         '@radix-ui/react-dropdown-menu',
       ],
       exclude: ['@langchain/openai', '@langchain/core'],
-    },
-    server: {
-      port: 3000,
-      strictPort: true,
-      hmr: {
-        overlay: true,
-      },
     },
     preview: {
       port: 3000,

@@ -326,10 +326,10 @@ export function ChatProvider({ children }: ChatProviderProps) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           message: content,
-          conversationId: currentConversation.id 
-        })
+          conversationId: currentConversation?.id,
+        }),
       });
 
       if (!response.ok) {
