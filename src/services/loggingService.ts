@@ -1,50 +1,21 @@
-import { PostgrestError } from '@supabase/supabase-js';
+export class LoggingService {
+  private context: string;
 
-const isDevelopment = import.meta.env.MODE === 'development';
-
-const formatError = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (error instanceof PostgrestError) {
-    return error.message;
-  }
-  if (typeof error === 'string') {
-    return error;
-  }
-  return JSON.stringify(error);
-};
-
-class Logger {
-  private formatMessage(level: string, message: string, ...args: unknown[]): string {
-    const timestamp = new Date().toISOString();
-    const formattedArgs = args.map(arg => formatError(arg)).join(' ');
-    return `[${timestamp}] [${level}] ${message} ${formattedArgs}`.trim();
+  constructor(context: string) {
+    this.context = context;
   }
 
-  debug(message: string, ...args: unknown[]) {
-    if (isDevelopment) {
-      console.debug(this.formatMessage('DEBUG', message), ...args);
+  info(message: string, data?: any) {
+    console.log(`[${this.context}] INFO:`, message, data ? data : '');
+  }
+
+  error(message: string, error?: any) {
+    console.error(`[${this.context}] ERROR:`, message, error ? error : '');
+  }
+
+  debug(message: string, data?: any) {
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`[${this.context}] DEBUG:`, message, data ? data : '');
     }
   }
-
-  info(message: string, ...args: unknown[]) {
-    console.info(this.formatMessage('INFO', message), ...args);
-  }
-
-  warn(message: string, ...args: unknown[]) {
-    console.warn(this.formatMessage('WARN', message), ...args);
-  }
-
-  error(message: string, ...args: unknown[]) {
-    console.error(this.formatMessage('ERROR', message), ...args);
-    
-    // In production, you might want to send this to an error tracking service
-    if (!isDevelopment) {
-      // TODO: Add error reporting service integration
-      // e.g., Sentry, LogRocket, etc.
-    }
-  }
-}
-
-export const logger = new Logger();
+} 
