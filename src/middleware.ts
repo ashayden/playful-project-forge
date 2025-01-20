@@ -1,5 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { Request, Response, NextFunction } from 'express';
+import { Session } from '@supabase/supabase-js';
+
+// Extend Express Request type
+declare module 'express' {
+  interface Request {
+    session?: Session | null;
+  }
+}
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,

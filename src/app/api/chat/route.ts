@@ -13,7 +13,7 @@ const openai = new OpenAI({
 
 export async function handleChatRequest(req: Request, res: Response) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const session = req.session;
 
     if (!session) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -55,7 +55,7 @@ export async function handleChatRequest(req: Request, res: Response) {
 
     // Create stream
     const stream = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'system',
@@ -66,46 +66,35 @@ export async function handleChatRequest(req: Request, res: Response) {
       stream: true,
     });
 
-    // Create a new response with streaming support
-    const encoder = new TextEncoder();
-    const customStream = new ReadableStream({
-      async start(controller) {
-        const saveMessage = async (content: string) => {
-          await supabase
-            .from('messages')
-            .insert({
-              content,
-              role: 'assistant',
-              conversation_id: conversationId,
-            });
-        };
+    // Set up SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
 
-        let fullResponse = '';
+    let fullResponse = '';
 
-        try {
-          for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content || '';
-            if (content) {
-              fullResponse += content;
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
-            }
-          }
+    // Stream the response
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        fullResponse += content;
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    }
 
-          // Save the complete message
-          await saveMessage(fullResponse);
-          
-          // Send the [DONE] message
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-        } catch (error) {
-          console.error('Error in stream processing:', error);
-          controller.error(error);
-        } finally {
-          controller.close();
-        }
-      },
-    });
+    // Save the complete message
+    await supabase
+      .from('messages')
+      .insert({
+        content: fullResponse,
+        role: 'assistant',
+        conversation_id: conversationId,
+        user_id: session.user.id,
+      });
 
-    return res.status(200).json({ success: true });
+    // End the response
+    res.write('data: [DONE]\n\n');
+    res.end();
   } catch (error) {
     console.error('Chat API error:', error);
     return res.status(500).json({ error: 'Internal server error' });
