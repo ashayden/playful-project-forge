@@ -1,18 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/services/loggingService';
+import { ChatOpenAI } from '@langchain/openai';
+import { SystemMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
 
-export const runtime = 'edge';
-
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     // Get auth token from request header
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       logger.error('Missing or invalid authorization header');
-      return NextResponse.json(
-        { error: 'Missing or invalid authorization header' },
-        { status: 401 }
+      return new Response(
+        JSON.stringify({ error: 'Missing or invalid authorization header' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -22,9 +21,9 @@ export async function POST(request: NextRequest) {
     
     if (authError || !user) {
       logger.error('Auth error:', authError);
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -34,9 +33,9 @@ export async function POST(request: NextRequest) {
     
     if (!message || typeof message !== 'string' || !conversationId) {
       logger.error('Invalid request format:', { message, conversationId });
-      return NextResponse.json(
-        { error: 'Invalid request format' },
-        { status: 400 }
+      return new Response(
+        JSON.stringify({ error: 'Invalid request format' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -85,13 +84,6 @@ export async function POST(request: NextRequest) {
       logger.error('Error creating assistant message:', assistantError);
       throw new Error('Failed to create assistant message');
     }
-
-    // Dynamically import LangChain modules
-    logger.info('Importing LangChain modules...');
-    const [{ ChatOpenAI }, { SystemMessage, HumanMessage, AIMessage }] = await Promise.all([
-      import('@langchain/openai'),
-      import('@langchain/core/messages')
-    ]);
 
     // Initialize AI model
     logger.info('Initializing AI model...');
@@ -191,15 +183,25 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no'  // Prevent proxy buffering
+        'X-Accel-Buffering': 'no',  // Prevent proxy buffering
+        'Transfer-Encoding': 'chunked'
       }
     });
 
   } catch (error) {
     logger.error('Error in chat API:', error);
-    return NextResponse.json({ 
-      error: error instanceof Error ? error.message : 'Internal Server Error',
-      success: false 
-    }, { status: 500 });
+    return new Response(
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Internal Server Error',
+        success: false 
+      }),
+      { 
+        status: 500, 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        } 
+      }
+    );
   }
 } 
