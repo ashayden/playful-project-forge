@@ -43,35 +43,62 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setIsSending(true);
 
       const stream = await AIService.streamCompletion([...messages, userMessage]);
-
+      const reader = stream.getReader();
+      const decoder = new TextDecoder();
       let assistantMessage = '';
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || '';
-        assistantMessage += content;
-        
-        setMessages(prev => {
-          const newMessages = [...prev];
-          const lastMessage = newMessages[newMessages.length - 1];
-          
-          if (lastMessage?.role === 'assistant') {
-            lastMessage.content = assistantMessage;
-            return [...newMessages];
-          } else {
-            return [...newMessages, {
-              role: 'assistant',
-              content: assistantMessage,
-              id: crypto.randomUUID(),
-              createdAt: new Date().toISOString(),
-            }];
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') break;
+
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed.content || '';
+                assistantMessage += content;
+                
+                // Update the message in real-time
+                setMessages(prev => {
+                  const lastMessage = prev[prev.length - 1];
+                  if (lastMessage?.role === 'assistant') {
+                    return [
+                      ...prev.slice(0, -1),
+                      { ...lastMessage, content: assistantMessage },
+                    ];
+                  } else {
+                    return [
+                      ...prev,
+                      {
+                        role: 'assistant',
+                        content: assistantMessage,
+                        id: crypto.randomUUID(),
+                        createdAt: new Date().toISOString(),
+                      },
+                    ];
+                  }
+                });
+              } catch (e) {
+                console.error('Error parsing SSE data:', e);
+              }
+            }
           }
-        });
+        }
+      } finally {
+        reader.releaseLock();
       }
 
-      logger.info('Message stream completed', { content });
+      setIsStreaming(false);
+      setIsSending(false);
     } catch (error) {
-      logger.error('Error in chat stream', error);
-      throw error;
-    } finally {
+      logger.error('Error in sendMessage:', error);
       setIsStreaming(false);
       setIsSending(false);
     }
