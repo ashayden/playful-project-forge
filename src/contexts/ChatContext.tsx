@@ -325,6 +325,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
+          'Accept': 'text/event-stream',
         },
         body: JSON.stringify({
           message: content,
@@ -337,12 +338,12 @@ export function ChatProvider({ children }: ChatProviderProps) {
         throw new Error(`API Error: ${errorText}`);
       }
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (!reader) {
+      if (!response.body) {
         throw new Error('No response stream available');
       }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
 
       let buffer = '';
       // Read the stream
@@ -352,42 +353,47 @@ export function ChatProvider({ children }: ChatProviderProps) {
         if (done) {
           // Process any remaining data in the buffer
           if (buffer) {
-            try {
-              const lines = buffer.split('\n');
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const data = line.slice(6);
-                  if (data === '[DONE]') break;
+            const lines = buffer.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                if (data === '[DONE]') break;
+                try {
                   const { content } = JSON.parse(data);
                   if (content) {
                     messageStreamRef.current += content;
+                    // Update UI with final content
+                    setMessages((prev) => {
+                      const updated = [...prev];
+                      const lastMessage = updated[updated.length - 1];
+                      if (lastMessage && lastMessage.id === tempAssistantMessage.id) {
+                        lastMessage.content = messageStreamRef.current;
+                      }
+                      return updated;
+                    });
                   }
+                } catch (e) {
+                  logger.error('Error processing final buffer:', e);
                 }
               }
-              // Update UI with final content
-              setMessages((prev) => {
-                const updated = [...prev];
-                const lastMessage = updated[updated.length - 1];
-                if (lastMessage && lastMessage.id === tempAssistantMessage.id) {
-                  lastMessage.content = messageStreamRef.current;
-                }
-                return updated;
-              });
-            } catch (e) {
-              logger.error('Error processing final buffer:', e);
             }
           }
           break;
         }
 
         // Decode new chunk and add to buffer
-        buffer += decoder.decode(value, { stream: true });
+        const newText = decoder.decode(value, { stream: true });
+        buffer += newText;
         
         // Process complete messages in buffer
         const lines = buffer.split('\n');
-        buffer = ''; // Clear buffer
+        const incompleteLastLine = !buffer.endsWith('\n');
         
-        for (const line of lines) {
+        // Process all complete lines
+        const linesToProcess = incompleteLastLine ? lines.slice(0, -1) : lines;
+        buffer = incompleteLastLine ? lines[lines.length - 1] : '';
+        
+        for (const line of linesToProcess) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
             if (data === '[DONE]') {
@@ -411,11 +417,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
               }
             } catch (e) {
               logger.error('Error parsing stream data:', e);
-              continue; // Skip this chunk if there's an error
+              continue;
             }
-          } else if (line) {
-            // If line is not empty but doesn't start with 'data: ', add it back to buffer
-            buffer += line + '\n';
           }
         }
       }
