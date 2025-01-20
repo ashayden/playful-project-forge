@@ -2,25 +2,39 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { AI_CONFIG } from '@/config/ai.config';
 
+// Validate environment variables
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+const OPENAI_API_KEY = process.env.VITE_OPENAI_API_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !OPENAI_API_KEY) {
+  throw new Error('Missing required environment variables');
+}
+
 // Create Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
-);
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Create OpenAI client
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: OPENAI_API_KEY,
 });
 
 export const runtime = 'edge';
 
 export async function POST(req: Request) {
   try {
+    // Validate request
+    if (!req.body) {
+      return new Response(JSON.stringify({ error: 'Request body is required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const { messages, conversationId } = await req.json();
 
-    if (!messages || !conversationId) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+    if (!messages?.length || !conversationId) {
+      return new Response(JSON.stringify({ error: 'Messages and conversationId are required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -77,13 +91,17 @@ export async function POST(req: Request) {
           }
 
           // Save the complete message
-          await supabase
+          const { error: dbError } = await supabase
             .from('messages')
             .insert({
               content: fullResponse,
               role: 'assistant',
               conversation_id: conversationId,
             });
+
+          if (dbError) {
+            console.error('Error saving message to database:', dbError);
+          }
 
           // Send the [DONE] message
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
@@ -106,9 +124,15 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error('Chat API error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
   }
 } 
