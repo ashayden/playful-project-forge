@@ -1,15 +1,18 @@
+import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/services/loggingService';
 
-export async function POST(request: Request) {
+export const runtime = 'edge';
+
+export async function POST(request: NextRequest) {
   try {
     // Get auth token from request header
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       logger.error('Missing or invalid authorization header');
-      return new Response(
-        JSON.stringify({ error: 'Missing or invalid authorization header' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      return NextResponse.json(
+        { error: 'Missing or invalid authorization header' },
+        { status: 401 }
       );
     }
 
@@ -19,9 +22,9 @@ export async function POST(request: Request) {
     
     if (authError || !user) {
       logger.error('Auth error:', authError);
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 
@@ -31,9 +34,9 @@ export async function POST(request: Request) {
     
     if (!message || typeof message !== 'string' || !conversationId) {
       logger.error('Invalid request format:', { message, conversationId });
-      return new Response(
-        JSON.stringify({ error: 'Invalid request format' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      return NextResponse.json(
+        { error: 'Invalid request format' },
+        { status: 400 }
       );
     }
 
@@ -194,12 +197,9 @@ export async function POST(request: Request) {
 
   } catch (error) {
     logger.error('Error in chat API:', error);
-    return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Internal Server Error',
-        success: false 
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'Internal Server Error',
+      success: false 
+    }, { status: 500 });
   }
 } 

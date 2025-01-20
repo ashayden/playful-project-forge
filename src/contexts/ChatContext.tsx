@@ -281,6 +281,16 @@ export function ChatProvider({ children }: ChatProviderProps) {
     setIsStreaming(true);
     messageStreamRef.current = '';
     
+    // Create temporary assistant message for streaming
+    const tempAssistantMessage: Message = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: '',
+      conversation_id: currentConversation.id,
+      user_id: undefined,
+      created_at: new Date().toISOString()
+    };
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -302,16 +312,6 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
       if (saveError) throw saveError;
 
-      // Create temporary assistant message for streaming
-      const tempAssistantMessage: Message = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: '',
-        conversation_id: currentConversation.id,
-        user_id: undefined,
-        created_at: new Date().toISOString()
-      };
-
       // Add temporary assistant message to UI
       setMessages((prev) => [...prev, tempAssistantMessage]);
 
@@ -320,7 +320,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       if (sessionError) throw sessionError;
 
       // Call API with streaming
-      const response = await fetch(`${window.location.origin}/api/chat`, {
+      const response = await fetch(`/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -344,13 +344,48 @@ export function ChatProvider({ children }: ChatProviderProps) {
         throw new Error('No response stream available');
       }
 
+      let buffer = '';
       // Read the stream
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        
+        if (done) {
+          // Process any remaining data in the buffer
+          if (buffer) {
+            try {
+              const lines = buffer.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
+                  if (data === '[DONE]') break;
+                  const { content } = JSON.parse(data);
+                  if (content) {
+                    messageStreamRef.current += content;
+                  }
+                }
+              }
+              // Update UI with final content
+              setMessages((prev) => {
+                const updated = [...prev];
+                const lastMessage = updated[updated.length - 1];
+                if (lastMessage && lastMessage.id === tempAssistantMessage.id) {
+                  lastMessage.content = messageStreamRef.current;
+                }
+                return updated;
+              });
+            } catch (e) {
+              logger.error('Error processing final buffer:', e);
+            }
+          }
+          break;
+        }
 
-        const text = decoder.decode(value);
-        const lines = text.split('\n');
+        // Decode new chunk and add to buffer
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Process complete messages in buffer
+        const lines = buffer.split('\n');
+        buffer = ''; // Clear buffer
         
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -364,7 +399,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
               if (content) {
                 messageStreamRef.current += content;
                 
-                // Update the temporary message with accumulated content
+                // Update UI immediately with new content
                 setMessages((prev) => {
                   const updated = [...prev];
                   const lastMessage = updated[updated.length - 1];
@@ -376,15 +411,19 @@ export function ChatProvider({ children }: ChatProviderProps) {
               }
             } catch (e) {
               logger.error('Error parsing stream data:', e);
+              continue; // Skip this chunk if there's an error
             }
+          } else if (line) {
+            // If line is not empty but doesn't start with 'data: ', add it back to buffer
+            buffer += line + '\n';
           }
         }
       }
 
-      // Final update will come through the real-time subscription
-
     } catch (error) {
       logger.error('Failed to send message:', error);
+      // Remove temporary message if there was an error
+      setMessages((prev) => prev.filter(msg => msg.id !== tempAssistantMessage.id));
       throw error;
     } finally {
       setIsSending(false);
