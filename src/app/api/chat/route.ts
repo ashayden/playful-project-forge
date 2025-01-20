@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { Request, Response } from 'express';
+import { AI_CONFIG } from '@/config/ai.config';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -9,6 +10,7 @@ const supabase = createClient(
 
 const openai = new OpenAI({
   apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: false, // Explicitly disable browser usage
 });
 
 export async function handleChatRequest(req: Request, res: Response) {
@@ -19,9 +21,9 @@ export async function handleChatRequest(req: Request, res: Response) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { message, conversationId } = req.body;
+    const { messages, conversationId } = req.body;
 
-    if (!message || !conversationId) {
+    if (!messages || !conversationId) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -29,7 +31,7 @@ export async function handleChatRequest(req: Request, res: Response) {
     const { error: messageError } = await supabase
       .from('messages')
       .insert({
-        content: message,
+        content: messages[messages.length - 1].content,
         role: 'user',
         conversation_id: conversationId,
         user_id: session.user.id,
@@ -40,29 +42,21 @@ export async function handleChatRequest(req: Request, res: Response) {
       return res.status(500).json({ error: 'Error saving message' });
     }
 
-    // Get conversation history
-    const { data: history } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true });
-
-    // Prepare messages for OpenAI
-    const messages = history?.map(msg => ({
-      role: msg.role,
-      content: msg.content,
-    })) || [];
-
     // Create stream
     const stream = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: AI_CONFIG.model,
       messages: [
         {
           role: 'system',
-          content: 'You are a helpful AI assistant. Respond concisely and accurately.',
+          content: AI_CONFIG.system_message,
         },
         ...messages,
       ],
+      temperature: AI_CONFIG.temperature,
+      max_tokens: AI_CONFIG.max_tokens,
+      top_p: AI_CONFIG.top_p,
+      frequency_penalty: AI_CONFIG.frequency_penalty,
+      presence_penalty: AI_CONFIG.presence_penalty,
       stream: true,
     });
 
