@@ -1,59 +1,60 @@
 'use client';
 
 import * as React from 'react';
-import { Button } from "@/components/ui/button";
-import { SendHorizontal } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Send } from 'lucide-react';
 
-interface ChatInputProps {
-  onSend: (message: string) => void;
+interface ChatInputProps extends Omit<React.HTMLAttributes<HTMLFormElement>, 'onSubmit'> {
+  onSend: (content: string) => Promise<void>;
   disabled?: boolean;
-  className?: string;
 }
 
-export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
-  const [input, setInput] = React.useState('');
+export function ChatInput({ className, onSend, disabled, ...props }: ChatInputProps) {
+  const [content, setContent] = React.useState('');
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
-  React.useEffect(() => {
-    if (textareaRef.current && !disabled) {
-      textareaRef.current.focus();
-    }
-  }, [disabled]);
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!input.trim() || disabled) return;
+    if (!content.trim() || disabled) return;
 
-    onSend(input);
-    setInput('');
-    textareaRef.current?.focus();
+    try {
+      await onSend(content);
+      setContent('');
+      textareaRef.current?.focus();
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e as unknown as React.FormEvent<HTMLFormElement>);
+      handleSubmit(e as any);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className={className}>
-      <div className="flex gap-2">
-        <Textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
-          disabled={disabled}
-          className="min-h-[52px] resize-none"
-          rows={1}
-        />
-        <Button type="submit" size="icon" disabled={disabled || !input.trim()}>
-          <SendHorizontal className="h-5 w-5" />
-        </Button>
-      </div>
+    <form onSubmit={handleSubmit} className={cn('relative', className)} {...props}>
+      <Textarea
+        ref={textareaRef}
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Type a message..."
+        disabled={disabled}
+        className="min-h-[60px] w-full resize-none rounded-lg pr-12"
+        rows={1}
+      />
+      <Button
+        type="submit"
+        size="icon"
+        disabled={!content.trim() || disabled}
+        className="absolute bottom-2 right-2"
+      >
+        <Send className="h-4 w-4" />
+      </Button>
     </form>
   );
 } 
