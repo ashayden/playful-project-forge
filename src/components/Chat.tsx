@@ -71,7 +71,7 @@ export function Chat() {
                 )}
               >
                 <p className="whitespace-pre-wrap break-words">
-                  {message.content}
+                  {typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}
                 </p>
               </div>
             </div>

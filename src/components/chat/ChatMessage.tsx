@@ -43,7 +43,9 @@ export function ChatMessage({ message, isLast }: ChatMessageProps) {
               : 'bg-muted text-foreground'
           )}
         >
-          <p className="text-sm">{message.content}</p>
+          <p className="text-sm">
+            {typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}
+          </p>
         </div>
       </div>
     </div>
