@@ -3,7 +3,7 @@ import { AI_CONFIG } from '@/config/ai.config';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 const openai = new OpenAI({
-  apiKey: process.env.VITE_OPENAI_API_KEY,
+  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
 });
 
 export class AIService {
