@@ -2,10 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { AI_CONFIG } from '@/config/ai.config';
 
-// Validate environment variables
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// In Edge runtime, we need to use VITE_ prefixed variables
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+const OPENAI_API_KEY = process.env.VITE_OPENAI_API_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !OPENAI_API_KEY) {
   throw new Error('Missing required environment variables');
