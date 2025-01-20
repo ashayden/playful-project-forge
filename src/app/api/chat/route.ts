@@ -1,30 +1,29 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { Request, Response } from 'express';
 import { AI_CONFIG } from '@/config/ai.config';
 
+// Create Supabase client
 const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Create OpenAI client
 const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: false, // Explicitly disable browser usage
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function handleChatRequest(req: Request, res: Response) {
+export const runtime = 'edge';
+
+export async function POST(req: Request) {
   try {
-    const session = req.session;
-
-    if (!session) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const { messages, conversationId } = req.body;
+    const { messages, conversationId } = await req.json();
 
     if (!messages || !conversationId) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     // Save user message
@@ -34,12 +33,14 @@ export async function handleChatRequest(req: Request, res: Response) {
         content: messages[messages.length - 1].content,
         role: 'user',
         conversation_id: conversationId,
-        user_id: session.user.id,
       });
 
     if (messageError) {
       console.error('Error saving user message:', messageError);
-      return res.status(500).json({ error: 'Error saving message' });
+      return new Response(JSON.stringify({ error: 'Error saving message' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     // Create stream
@@ -60,37 +61,54 @@ export async function handleChatRequest(req: Request, res: Response) {
       stream: true,
     });
 
-    // Set up SSE headers
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    // Create a TransformStream for streaming the response
+    const encoder = new TextEncoder();
+    const customStream = new ReadableStream({
+      async start(controller) {
+        let fullResponse = '';
 
-    let fullResponse = '';
+        try {
+          for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+              fullResponse += content;
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+            }
+          }
 
-    // Stream the response
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || '';
-      if (content) {
-        fullResponse += content;
-        res.write(`data: ${JSON.stringify({ content })}\n\n`);
-      }
-    }
+          // Save the complete message
+          await supabase
+            .from('messages')
+            .insert({
+              content: fullResponse,
+              role: 'assistant',
+              conversation_id: conversationId,
+            });
 
-    // Save the complete message
-    await supabase
-      .from('messages')
-      .insert({
-        content: fullResponse,
-        role: 'assistant',
-        conversation_id: conversationId,
-        user_id: session.user.id,
-      });
+          // Send the [DONE] message
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        } catch (error) {
+          console.error('Error in stream processing:', error);
+          controller.error(error);
+        } finally {
+          controller.close();
+        }
+      },
+    });
 
-    // End the response
-    res.write('data: [DONE]\n\n');
-    res.end();
+    // Return the stream response
+    return new Response(customStream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   } catch (error) {
     console.error('Chat API error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 } 
