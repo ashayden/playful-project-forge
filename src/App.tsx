@@ -5,15 +5,17 @@ import { useAuth } from '@/contexts/auth-context';
 import { AppSidebar } from '@/components/app-sidebar';
 import { ChatInterface } from '@/components/chat/ChatInterface';
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export function App() {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!loading && !user) {
-      window.location.href = '/auth';
+      navigate('/auth');
     }
-  }, [user, loading]);
+  }, [user, loading, navigate]);
 
   if (loading) {
     return (
