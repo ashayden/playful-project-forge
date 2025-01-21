@@ -17,14 +17,15 @@ interface ChatRequestBody {
   conversationId: string;
 }
 
-export async function POST(request: Request) {
-  // Set CORS headers
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  };
+// CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
+};
 
+export async function POST(request: Request) {
   try {
     // Log request details
     console.log('Processing chat request:', {
@@ -32,6 +33,15 @@ export async function POST(request: Request) {
       headers: Object.fromEntries(request.headers.entries()),
     });
 
+    // Check request method
+    if (request.method !== 'POST') {
+      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+        status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Parse request body
     const body = await request.json() as ChatRequestBody;
     const { messages, conversationId } = body;
 
@@ -39,7 +49,7 @@ export async function POST(request: Request) {
       console.log('Invalid request:', { hasMessages: !!messages?.length, hasConversationId: !!conversationId });
       return new Response(JSON.stringify({ error: 'Messages and conversationId are required' }), {
         status: 400,
-        headers: { ...headers, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
@@ -62,7 +72,7 @@ export async function POST(request: Request) {
       await writer.write(encoder.encode(`data: ${JSON.stringify({ error: 'Error saving message' })}\n\n`));
       await writer.close();
       return new Response(stream.readable, {
-        headers: { ...headers, 'Content-Type': 'text/event-stream' },
+        headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' },
       });
     }
 
@@ -109,13 +119,13 @@ export async function POST(request: Request) {
     })();
 
     return new Response(stream.readable, {
-      headers: { ...headers, 'Content-Type': 'text/event-stream' },
+      headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' },
     });
   } catch (error) {
     console.error('API Error:', error);
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
-      headers: { ...headers, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 }
@@ -123,10 +133,6 @@ export async function POST(request: Request) {
 export async function OPTIONS() {
   return new Response(null, {
     status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
+    headers: corsHeaders,
   });
 } 
