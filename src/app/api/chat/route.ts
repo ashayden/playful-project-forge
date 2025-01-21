@@ -3,16 +3,30 @@ import OpenAI from 'openai';
 import { AI_CONFIG } from '@/config/ai.config';
 
 // Get environment variables
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const SUPABASE_URL = import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const OPENAI_API_KEY = import.meta.env.OPENAI_API_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !OPENAI_API_KEY) {
+  console.error('Missing required environment variables:', {
+    hasSupabaseUrl: !!SUPABASE_URL,
+    hasSupabaseKey: !!SUPABASE_ANON_KEY,
+    hasOpenAIKey: !!OPENAI_API_KEY,
+  });
   throw new Error('Missing required environment variables for chat API');
 }
 
-// Create Supabase client
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Create Supabase client with service role for API routes
+const supabase = createClient(
+  SUPABASE_URL,
+  import.meta.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY, // Fallback to anon key if service role key is not available
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 // Create OpenAI client
 const openai = new OpenAI({
