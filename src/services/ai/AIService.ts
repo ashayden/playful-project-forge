@@ -12,14 +12,14 @@ export class AIService {
         },
         body: JSON.stringify({
           messages,
-          conversationId: crypto.randomUUID(), // Generate a unique ID for the conversation
+          conversationId: crypto.randomUUID(),
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.text();
         console.error('API Error Response:', errorData);
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
+        throw new Error(`API error: ${response.status}`);
       }
 
       if (!response.body) {
