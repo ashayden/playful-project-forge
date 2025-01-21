@@ -1,4 +1,4 @@
-import express, { Request, Response, Router, RequestHandler } from 'express';
+import express, { Request, Response, Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { AI_CONFIG } from '@/config/ai.config';
@@ -32,12 +32,13 @@ interface ChatRequest {
   conversationId: string;
 }
 
-const handleChat: RequestHandler = async (req: Request<{}, any, ChatRequest>, res: Response) => {
+async function handleChat(req: Request<{}, any, ChatRequest>, res: Response): Promise<void> {
   try {
     const { messages, conversationId } = req.body;
 
     if (!messages?.length || !conversationId) {
-      return res.status(400).json({ error: 'Messages and conversationId are required' });
+      res.status(400).json({ error: 'Messages and conversationId are required' });
+      return;
     }
 
     // Save user message
@@ -51,7 +52,8 @@ const handleChat: RequestHandler = async (req: Request<{}, any, ChatRequest>, re
 
     if (messageError) {
       console.error('Error saving user message:', messageError);
-      return res.status(500).json({ error: 'Error saving message' });
+      res.status(500).json({ error: 'Error saving message' });
+      return;
     }
 
     // Set up SSE
@@ -115,7 +117,7 @@ const handleChat: RequestHandler = async (req: Request<{}, any, ChatRequest>, re
       res.end();
     }
   }
-};
+}
 
 router.post('/chat', handleChat);
 
