@@ -4,7 +4,17 @@ import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 export class AIService {
   static async streamCompletion(messages: ChatCompletionMessageParam[]) {
     try {
-      console.log('Sending request to chat API...');
+      const payload = {
+        messages,
+        conversationId: crypto.randomUUID(),
+      };
+      
+      console.log('Sending chat request with payload:', {
+        messageCount: messages.length,
+        lastMessage: messages[messages.length - 1],
+        conversationId: payload.conversationId,
+      });
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -13,10 +23,13 @@ export class AIService {
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
         },
-        body: JSON.stringify({
-          messages,
-          conversationId: crypto.randomUUID(),
-        }),
+        body: JSON.stringify(payload),
+      });
+
+      console.log('API Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
       });
 
       if (!response.ok) {

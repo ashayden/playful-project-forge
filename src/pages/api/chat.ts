@@ -8,6 +8,14 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? SUPABASE_ANON_KEY;
 
+// Log environment variable status
+console.log('Environment variables status:', {
+  hasSupabaseUrl: !!SUPABASE_URL,
+  hasSupabaseAnonKey: !!SUPABASE_ANON_KEY,
+  hasOpenAIKey: !!OPENAI_API_KEY,
+  hasServiceRoleKey: !!SUPABASE_SERVICE_ROLE_KEY,
+});
+
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !OPENAI_API_KEY) {
   throw new Error('Missing required environment variables');
 }
@@ -16,18 +24,32 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  console.log('API Request:', {
+    method: req.method,
+    headers: req.headers,
+    url: req.url,
+  });
+
   if (req.method !== 'POST') {
+    console.log('Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
   const { messages, conversationId } = req.body;
 
   if (!messages?.length || !conversationId) {
+    console.log('Invalid request:', { hasMessages: !!messages?.length, hasConversationId: !!conversationId });
     return res.status(400).json({ error: 'Messages and conversationId are required' });
   }
 
   try {
     // Save user message to Supabase
+    console.log('Saving user message:', {
+      content: messages[messages.length - 1].content,
+      conversationId,
+    });
+
     const { error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -36,13 +58,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         conversation_id: conversationId,
       });
 
-    if (messageError) throw new Error('Error saving user message to database');
+    if (messageError) {
+      console.error('Database error saving user message:', messageError);
+      throw new Error('Error saving user message to database');
+    }
 
     // Set up streaming headers
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
+    console.log('Starting OpenAI stream...');
     // Start OpenAI streaming
     const stream = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
@@ -51,14 +77,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     let fullResponse = '';
+    let chunkCount = 0;
 
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content || '';
       if (content) {
         fullResponse += content;
+        chunkCount++;
+        if (chunkCount % 10 === 0) {
+          console.log(`Streamed ${chunkCount} chunks...`);
+        }
         res.write(`data: ${JSON.stringify({ content })}\n\n`);
       }
     }
+
+    console.log('Stream completed. Saving assistant response:', {
+      responseLength: fullResponse.length,
+      chunkCount,
+    });
 
     // Save assistant response to Supabase
     const { error: dbError } = await supabase
@@ -76,7 +112,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.write('data: [DONE]\n\n');
     res.end();
   } catch (error) {
-    console.error('API Error:', (error as Error).message);
+    console.error('API Error:', {
+      message: (error as Error).message,
+      stack: (error as Error).stack,
+    });
 
     if (!res.headersSent) {
       res.status(500).json({
