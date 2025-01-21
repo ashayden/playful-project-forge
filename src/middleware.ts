@@ -9,8 +9,8 @@ export async function middleware(req: NextRequest) {
   try {
     // Create a Supabase client configured to use cookies
     const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      import.meta.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
       {
         cookies: {
           get: (name) => req.cookies.get(name)?.value,

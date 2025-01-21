@@ -4,8 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database.types';
 
 // Required environment variables for client-side
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error(
@@ -17,8 +17,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 // Create Supabase client
 export const supabase = createClient<Database>(
-  supabaseUrl ?? '',
-  supabaseAnonKey ?? '',
+  supabaseUrl || '',
+  supabaseAnonKey || '',
   {
     auth: {
       persistSession: true,
