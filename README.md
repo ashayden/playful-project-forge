@@ -1,28 +1,29 @@
 # Playful Project Forge
 
-A modern AI chat interface built with React and TypeScript, featuring real-time messaging, development tools, and a beautiful dark-mode UI.
+A modern AI chat interface built with React and TypeScript, featuring real-time messaging and a beautiful dark-mode UI powered by OpenAI's GPT models.
 
 ## Tech Stack
 
 - **Frontend Framework**: React 18 with TypeScript
-- **AI Integration**: LangChain for AI processing
-- **Backend & Auth**: Supabase (PostgreSQL + Real-time subscriptions)
+- **AI Integration**: OpenAI API with streaming responses
+- **Backend & Auth**: Supabase (PostgreSQL + Authentication)
 - **UI Components**: shadcn/ui (Built on Radix UI)
 - **Styling**: Tailwind CSS
 - **Build Tool**: Vite
-- **Testing**: Vitest + React Testing Library
+- **Routing**: React Router
+- **Form Handling**: React Hook Form + Zod
 
 ## Features
 
-- 🤖 AI-powered chat interface
+- 🤖 AI-powered chat interface with streaming responses
 - 🔄 Real-time message updates
 - 🎨 Modern dark theme UI
-- 🔒 Authentication with Supabase
-- 📊 Development metrics and status indicators
+- 🔒 GitHub authentication with Supabase
+- 📊 Performance monitoring and metrics
 - ⚡️ Fast and responsive design
 - 💻 Code syntax highlighting
-- 🌐 Real-time connection status
 - ⌨️ Typing indicators
+- 🚀 Optimized for Vercel deployment
 
 ## Getting Started
 
@@ -48,9 +49,9 @@ npm install
 
 3. Create a `.env.local` file with your environment variables:
 ```env
-VITE_OPENAI_API_KEY=your_openai_api_key
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+OPENAI_API_KEY=your_openai_api_key
 ```
 
 ### Development
@@ -74,28 +75,35 @@ npm run build
 
 ```
 src/
-├── components/     # React components
-├── contexts/       # React contexts
+├── api/           # API routes
+├── app/           # App pages and layouts
+├── components/    # React components
+├── contexts/      # React contexts
 ├── hooks/         # Custom hooks
 ├── lib/           # Utility functions
-├── pages/         # Page components
 ├── services/      # Service integrations
-├── styles/        # Global styles
 └── types/         # TypeScript types
 ```
 
 ## Development Features
 
-- Real-time connection status monitoring
-- Message latency tracking
-- Development environment indicators
+- Streaming chat responses
+- Performance monitoring
 - Type-safe components and hooks
 - Comprehensive error boundaries
-- Automated testing setup
+- GitHub authentication
+- Message persistence with Supabase
 
 ## Deployment
 
-The project is configured for deployment on Vercel. Simply connect your GitHub repository to Vercel and add the required environment variables in your project settings.
+The project is configured for deployment on Vercel:
+
+1. Connect your GitHub repository to Vercel
+2. Add the required environment variables in your project settings:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `OPENAI_API_KEY`
+3. Deploy!
 
 ## Contributing
 
