@@ -24,19 +24,44 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Log the incoming request
   console.log('API Request:', {
     method: req.method,
-    headers: req.headers,
     url: req.url,
+    headers: {
+      'content-type': req.headers['content-type'],
+      'accept': req.headers['accept'],
+    },
+    body: req.body,
   });
 
-  if (req.method !== 'POST') {
-    console.log('Method not allowed:', req.method);
-    return res.status(405).json({ error: 'Method not allowed' });
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    res.status(200).end();
+    return;
   }
 
-  console.log('Request body:', JSON.stringify(req.body, null, 2));
-  const { messages, conversationId } = req.body;
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    console.log('Method not allowed:', req.method);
+    return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+  }
+
+  // Parse and validate request body
+  let messages, conversationId;
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    messages = body.messages;
+    conversationId = body.conversationId;
+    
+    console.log('Parsed request body:', { messages, conversationId });
+  } catch (error) {
+    console.error('Error parsing request body:', error);
+    return res.status(400).json({ error: 'Invalid request body' });
+  }
 
   if (!messages?.length || !conversationId) {
     console.log('Invalid request:', { hasMessages: !!messages?.length, hasConversationId: !!conversationId });
@@ -67,6 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
 
     console.log('Starting OpenAI stream...');
     // Start OpenAI streaming
