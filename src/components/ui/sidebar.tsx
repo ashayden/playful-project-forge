@@ -23,7 +23,7 @@ export function Sidebar({
     <Collapsible
       defaultOpen={!defaultCollapsed}
       open={!isCollapsed}
-      onOpenChange={(open) => setIsCollapsed(!open)}
+      onOpenChange={(open: boolean) => setIsCollapsed(!open)}
       className={cn('h-full', className)}
       {...props}
     >
