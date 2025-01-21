@@ -118,7 +118,7 @@ export function AuthPage() {
 
         <button
           type="button"
-          onClick={() => window.location.href = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/authorize?provider=github`}
+          onClick={() => window.location.href = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/authorize?provider=github`}
           className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50"
         >
           Continue with GitHub
