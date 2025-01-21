@@ -1,59 +1,49 @@
+import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { AI_CONFIG } from '@/config/ai.config';
-import type { Request, Response } from 'express';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
-// Get environment variables
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// Load environment variables
+const SUPABASE_URL = import.meta.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+const SUPABASE_ANON_KEY = import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const OPENAI_API_KEY = import.meta.env.OPENAI_API_KEY ?? '';
+const SUPABASE_SERVICE_ROLE_KEY = import.meta.env.SUPABASE_SERVICE_ROLE_KEY ?? SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !OPENAI_API_KEY) {
-  console.error('Missing required environment variables:', {
-    hasSupabaseUrl: !!SUPABASE_URL,
-    hasSupabaseKey: !!SUPABASE_ANON_KEY,
-    hasOpenAIKey: !!OPENAI_API_KEY,
-  });
-  throw new Error('Missing required environment variables for chat API');
-}
-
-// Create Supabase client with service role for API routes
-const supabase = createClient(
-  SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-);
-
-// Create OpenAI client
-const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY,
-});
+// Initialize clients
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 interface ChatRequestBody {
   messages: ChatCompletionMessageParam[];
   conversationId: string;
 }
 
-export async function handleChatRequest(
-  req: Request<{}, {}, ChatRequestBody>,
-  res: Response
-): Promise<void> {
-  console.log('Request method:', req.method);
-  console.log('Request body:', req.body);
+export async function handleChatRequest(req: Request<{}, {}, ChatRequestBody>, res: Response): Promise<void> {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   try {
+    // Log request details
+    console.log('Processing chat request:', {
+      method: req.method,
+      headers: req.headers,
+      body: req.body,
+    });
+
     const { messages, conversationId } = req.body;
 
     if (!messages?.length || !conversationId) {
+      console.log('Invalid request:', { hasMessages: !!messages?.length, hasConversationId: !!conversationId });
       res.status(400).json({ error: 'Messages and conversationId are required' });
       return;
     }
+
+    // Set up streaming response
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
 
     // Save user message
     const { error: messageError } = await supabase
@@ -66,36 +56,20 @@ export async function handleChatRequest(
 
     if (messageError) {
       console.error('Error saving user message:', messageError);
-      res.status(500).json({ error: 'Error saving message' });
+      res.write(`data: ${JSON.stringify({ error: 'Error saving message' })}\n\n`);
+      res.end();
       return;
     }
 
-    // Set up SSE headers
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-    // Create stream
+    // Start OpenAI streaming
     const stream = await openai.chat.completions.create({
-      model: AI_CONFIG.model,
-      messages: [
-        {
-          role: 'system',
-          content: AI_CONFIG.system_message,
-        } as ChatCompletionMessageParam,
-        ...messages,
-      ],
-      temperature: AI_CONFIG.temperature,
-      max_tokens: AI_CONFIG.max_tokens,
-      top_p: AI_CONFIG.top_p,
-      frequency_penalty: AI_CONFIG.frequency_penalty,
-      presence_penalty: AI_CONFIG.presence_penalty,
+      model: 'gpt-3.5-turbo',
+      messages,
       stream: true,
     });
 
     let fullResponse = '';
 
-    // Stream the response
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content || '';
       if (content) {
@@ -104,7 +78,7 @@ export async function handleChatRequest(
       }
     }
 
-    // Save the complete message
+    // Save assistant response
     const { error: dbError } = await supabase
       .from('messages')
       .insert({
@@ -114,28 +88,18 @@ export async function handleChatRequest(
       });
 
     if (dbError) {
-      console.error('Error saving message to database:', dbError);
+      console.error('Error saving assistant message:', dbError);
     }
 
-    // Send the [DONE] message and end the response
     res.write('data: [DONE]\n\n');
     res.end();
   } catch (error) {
-    console.error('Chat API error:', error);
-    // If headers haven't been sent yet, send error response
+    console.error('API Error:', error);
     if (!res.headersSent) {
-      res.status(500).json({
-        error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      });
+      res.status(500).json({ error: 'Internal server error' });
     } else {
-      // If headers were sent, attempt to write error to stream
-      try {
-        res.write(`data: ${JSON.stringify({ error: 'Stream error occurred' })}\n\n`);
-        res.end();
-      } catch (e) {
-        console.error('Error sending error message:', e);
-      }
+      res.write(`data: ${JSON.stringify({ error: 'Stream error occurred' })}\n\n`);
+      res.end();
     }
   }
 } 
