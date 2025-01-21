@@ -8,15 +8,11 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !OPENAI_API_KEY) {
-  throw new Error('Missing required environment variables');
+  throw new Error('Missing required environment variables for chat API');
 }
 
 // Create Supabase client
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: false, // API routes don't need session persistence
-  },
-});
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Create OpenAI client
 const openai = new OpenAI({
