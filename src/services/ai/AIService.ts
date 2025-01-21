@@ -4,7 +4,7 @@ import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 export class AIService {
   static async streamCompletion(messages: ChatCompletionMessageParam[]) {
     try {
-      const response = await fetch(`${window.location.origin}/api/chat`, {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
