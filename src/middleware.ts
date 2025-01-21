@@ -7,19 +7,10 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    // If environment variables are missing, redirect to an error page or show a message
-    if (!supabaseUrl || !supabaseAnonKey) {
-      // For now, just return the response and let the client handle the error state
-      return res;
-    }
-
     // Create a Supabase client configured to use cookies
     const supabase = createServerClient<Database>(
-      supabaseUrl,
-      supabaseAnonKey,
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           get: (name) => req.cookies.get(name)?.value,
@@ -33,29 +24,23 @@ export async function middleware(req: NextRequest) {
       }
     );
 
-    try {
-      // Refresh session if expired - required for Server Components
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // If no session and not on auth page, redirect to auth
-      if (!session && !req.nextUrl.pathname.startsWith('/auth')) {
-        return NextResponse.redirect(new URL('/auth', req.url));
-      }
+    // Refresh session if expired
+    const { data: { session } } = await supabase.auth.getSession();
 
-      // If has session and on auth page, redirect to app
-      if (session && req.nextUrl.pathname.startsWith('/auth')) {
-        return NextResponse.redirect(new URL('/', req.url));
-      }
-    } catch (error) {
-      console.warn('Error refreshing auth session:', error);
-      // Continue even if session refresh fails
+    // Handle auth redirects
+    if (!session && !req.nextUrl.pathname.startsWith('/auth')) {
+      return NextResponse.redirect(new URL('/auth', req.url));
+    }
+
+    if (session && req.nextUrl.pathname.startsWith('/auth')) {
+      return NextResponse.redirect(new URL('/', req.url));
     }
 
     return res;
   } catch (e) {
-    console.warn('Middleware error:', e);
-    // Return the response even if there's an error
-    return res;
+    console.error('Middleware error:', e);
+    // On error, redirect to auth page
+    return NextResponse.redirect(new URL('/auth', req.url));
   }
 }
 
