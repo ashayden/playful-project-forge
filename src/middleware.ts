@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import type { Database } from '@/types/database.types';
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
@@ -9,14 +10,14 @@ export async function middleware(req: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    // If environment variables are missing, just return the response
-    // This allows the app to load and show proper error messages
+    // If environment variables are missing, redirect to an error page or show a message
     if (!supabaseUrl || !supabaseAnonKey) {
+      // For now, just return the response and let the client handle the error state
       return res;
     }
 
     // Create a Supabase client configured to use cookies
-    const supabase = createServerClient(
+    const supabase = createServerClient<Database>(
       supabaseUrl,
       supabaseAnonKey,
       {
@@ -34,7 +35,17 @@ export async function middleware(req: NextRequest) {
 
     try {
       // Refresh session if expired - required for Server Components
-      await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // If no session and not on auth page, redirect to auth
+      if (!session && !req.nextUrl.pathname.startsWith('/auth')) {
+        return NextResponse.redirect(new URL('/auth', req.url));
+      }
+
+      // If has session and on auth page, redirect to app
+      if (session && req.nextUrl.pathname.startsWith('/auth')) {
+        return NextResponse.redirect(new URL('/', req.url));
+      }
     } catch (error) {
       console.warn('Error refreshing auth session:', error);
       // Continue even if session refresh fails
