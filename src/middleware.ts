@@ -6,20 +6,12 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
 
   try {
-    // Get environment variables
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    // Log environment variable status (debug only)
-    console.debug('Environment variables status:', {
-      hasUrl: !!supabaseUrl,
-      hasKey: !!supabaseAnonKey,
-      url: supabaseUrl?.substring(0, 10) + '...',
-    });
-
+    // If environment variables are missing, just return the response
+    // This allows the app to load and show proper error messages
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.error('Missing required Supabase environment variables in middleware');
-      // Don't throw error, just return response to prevent blocking the request
       return res;
     }
 
@@ -40,13 +32,18 @@ export async function middleware(req: NextRequest) {
       }
     );
 
-    // Refresh session if expired - required for Server Components
-    await supabase.auth.getSession();
+    try {
+      // Refresh session if expired - required for Server Components
+      await supabase.auth.getSession();
+    } catch (error) {
+      console.warn('Error refreshing auth session:', error);
+      // Continue even if session refresh fails
+    }
 
     return res;
   } catch (e) {
-    console.error('Middleware error:', e);
-    // Don't throw error, just return response to prevent blocking the request
+    console.warn('Middleware error:', e);
+    // Return the response even if there's an error
     return res;
   }
 }

@@ -3,35 +3,24 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/types/database.types';
 
-// Ensure environment variables are available
-if (
-  typeof window !== 'undefined' &&
-  !window.process?.env?.NEXT_PUBLIC_SUPABASE_URL &&
-  !window.process?.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY
-) {
-  console.warn('Environment variables not found in window.process.env, checking process.env directly');
-}
-
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing required environment variables:', {
-    url: !!supabaseUrl,
-    key: !!supabaseAnonKey
-  });
-  throw new Error(
-    'Missing environment variables: NEXT_PUBLIC_SUPABASE_URL and/or NEXT_PUBLIC_SUPABASE_ANON_KEY must be set'
-  );
+  console.warn('Supabase environment variables are missing. Authentication may not work properly.');
 }
 
+// Create the Supabase client even if environment variables are missing
+// This allows the app to load and show proper error messages
 export const supabase = createClient<Database>(
-  supabaseUrl,
-  supabaseAnonKey,
+  supabaseUrl ?? '',  // Fallback to empty string if undefined
+  supabaseAnonKey ?? '',  // Fallback to empty string if undefined
   {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
+      detectSessionInUrl: true,
+      flowType: 'pkce',
     },
   }
 ); 
