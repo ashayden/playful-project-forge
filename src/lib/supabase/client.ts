@@ -1,20 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/types/database.types';
 
-if (!import.meta.env.VITE_SUPABASE_URL) {
-  throw new Error('Missing env.VITE_SUPABASE_URL');
-}
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!import.meta.env.VITE_SUPABASE_ANON_KEY) {
-  throw new Error('Missing env.VITE_SUPABASE_ANON_KEY');
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables');
 }
 
 export const supabase = createClient<Database>(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  supabaseUrl,
+  supabaseAnonKey,
   {
     auth: {
       persistSession: true,
+      autoRefreshToken: true,
     },
   }
 ); 
