@@ -4,13 +4,40 @@ import type { NextRequest } from 'next/server';
 import type { Database } from '@/types/database.types';
 
 export async function middleware(req: NextRequest) {
+  // For API routes, handle CORS
+  if (req.nextUrl.pathname.startsWith('/api')) {
+    console.log('API Middleware - Method:', req.method);
+    console.log('API Middleware - URL:', req.url);
+    
+    // Handle CORS preflight requests
+    if (req.method === 'OPTIONS') {
+      return new NextResponse(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
+    }
+
+    // For API routes, add CORS headers and continue
+    const response = NextResponse.next();
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return response;
+  }
+
+  // For non-API routes, handle auth
   const res = NextResponse.next();
 
   try {
     // Create a Supabase client configured to use cookies
     const supabase = createServerClient<Database>(
-      import.meta.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
       {
         cookies: {
           get: (name) => req.cookies.get(name)?.value,
@@ -44,49 +71,12 @@ export async function middleware(req: NextRequest) {
   }
 }
 
-// Update matcher to exclude api routes and static files
-export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
-};
-
-export function middleware(request: NextRequest) {
-  console.log('Middleware - Method:', request.method);
-  console.log('Middleware - URL:', request.url);
-  
-  // Handle CORS preflight requests
-  if (request.method === 'OPTIONS') {
-    return new NextResponse(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Max-Age': '86400',
-      },
-    });
-  }
-
-  // Continue with the request
-  const response = NextResponse.next();
-
-  // Add CORS headers to all responses
-  response.headers.set('Access-Control-Allow-Origin', '*');
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  return response;
-}
-
 // Configure which routes use this middleware
 export const config = {
-  matcher: '/api/:path*',
+  matcher: [
+    // Include API routes
+    '/api/:path*',
+    // Include all pages except static files and API routes
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
 } 
