@@ -9,7 +9,7 @@ export class AIService {
   private static getApiUrl() {
     // Use full URL in production, relative URL in development
     return process.env.NODE_ENV === 'production'
-      ? 'https://playful-project-forge-j07u8s4ok-ashayden-gmailcoms-projects.vercel.app/api/chat'
+      ? 'https://playful-project-forge.vercel.app/api/chat'
       : '/api/chat';
   }
 
