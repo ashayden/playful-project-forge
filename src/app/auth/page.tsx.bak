@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 
-export default function Page() {
+export default function AuthPage() {
   const { user, loading, signInWithEmail, signUp } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
