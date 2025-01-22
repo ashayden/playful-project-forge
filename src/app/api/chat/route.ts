@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Load environment variables
@@ -30,7 +30,7 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     // Log request details
     console.log('Processing chat request:', {
