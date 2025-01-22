@@ -2,92 +2,82 @@
 
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { AIService } from '@/services/ai/AIService';
-import { logger } from '@/services/loggingService';
-import { Message, Conversation } from '@/types/chat';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 interface ChatContextType {
-  messages: Message[];
-  conversations: Conversation[];
-  currentConversation: Conversation | null;
+  messages: ChatCompletionMessageParam[];
   isStreaming: boolean;
   isSending: boolean;
   sendMessage: (content: string) => Promise<void>;
-  clearMessages: () => void;
-  createConversation: () => Promise<void>;
-  deleteConversation: (id: string) => Promise<void>;
-  setCurrentConversation: (conversation: Conversation) => void;
 }
 
-export const ChatContext = createContext<ChatContextType | undefined>(undefined);
+const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
+  const [messages, setMessages] = useState<ChatCompletionMessageParam[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
   const sendMessage = useCallback(async (content: string) => {
-    if (!currentConversation) return;
-    
     try {
-      const userMessage: Message = {
-        role: 'user',
-        content,
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-      };
-
-      setMessages(prev => [...prev, userMessage]);
-      setIsStreaming(true);
       setIsSending(true);
+      
+      // Add user message
+      const userMessage: ChatCompletionMessageParam = { role: 'user', content };
+      setMessages(prev => [...prev, userMessage]);
 
-      const stream = await AIService.streamCompletion([...messages, userMessage]);
-      const reader = stream.getReader();
+      // Generate conversation ID if needed
+      const conversationId = crypto.randomUUID();
+
+      // Start streaming
+      setIsStreaming(true);
+      const stream = await AIService.streamCompletion({
+        messages: [...messages, userMessage],
+        conversationId,
+      });
+
+      // Create a decoder for the stream
       const decoder = new TextDecoder();
-      let assistantMessage = '';
-      let messageId = crypto.randomUUID();
+      const reader = stream.getReader();
+
+      // Initialize assistant's message
+      let assistantMessage: ChatCompletionMessageParam = {
+        role: 'assistant',
+        content: '',
+      };
+      setMessages(prev => [...prev, assistantMessage]);
 
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
+          // Decode the chunk
           const chunk = decoder.decode(value);
-          const lines = chunk.split('\n').filter(line => line.trim() !== '');
+          const lines = chunk.split('\n');
 
+          // Process each line
           for (const line of lines) {
             if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              if (data === '[DONE]') break;
+              const data = line.slice(5);
+              if (data === '[DONE]') continue;
 
               try {
                 const parsed = JSON.parse(data);
-                const content = parsed.content || '';
-                assistantMessage += content;
-                
-                // Update the message in real-time
-                setMessages(prev => {
-                  const lastMessage = prev[prev.length - 1];
-                  if (lastMessage?.role === 'assistant' && lastMessage.id === messageId) {
-                    return [
-                      ...prev.slice(0, -1),
-                      { ...lastMessage, content: assistantMessage },
-                    ];
-                  } else {
-                    return [
-                      ...prev,
-                      {
-                        role: 'assistant',
-                        content: assistantMessage,
-                        id: messageId,
-                        createdAt: new Date().toISOString(),
-                      },
-                    ];
-                  }
-                });
-              } catch (e) {
-                console.error('Error parsing SSE data:', e, 'Raw data:', data);
+                if (parsed.content) {
+                  // Update assistant's message
+                  assistantMessage.content += parsed.content;
+                  setMessages(prev => [
+                    ...prev.slice(0, -1),
+                    { ...assistantMessage },
+                  ]);
+                } else if (parsed.error) {
+                  console.error('Stream error:', parsed.error);
+                  throw new Error(parsed.error);
+                }
+              } catch (error) {
+                console.error('Error parsing stream data:', error);
+                console.log('Raw data:', data);
               }
             }
           }
@@ -97,65 +87,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         throw error;
       } finally {
         reader.releaseLock();
-        setIsStreaming(false);
-        setIsSending(false);
       }
     } catch (error) {
       console.error('Error in sendMessage:', error);
-      setIsStreaming(false);
-      setIsSending(false);
-      // Add the error message to the chat
+      // Add error message to the chat
       setMessages(prev => [
         ...prev,
         {
-          role: 'system',
+          role: 'assistant',
           content: 'An error occurred while processing your message. Please try again.',
-          id: crypto.randomUUID(),
-          createdAt: new Date().toISOString(),
         },
       ]);
+    } finally {
+      setIsStreaming(false);
+      setIsSending(false);
     }
-  }, [messages, currentConversation]);
-
-  const clearMessages = useCallback(() => {
-    setMessages([]);
-  }, []);
-
-  const createConversation = useCallback(async () => {
-    const newConversation: Conversation = {
-      id: crypto.randomUUID(),
-      title: 'New Chat',
-      messages: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setConversations(prev => [newConversation, ...prev]);
-    setCurrentConversation(newConversation);
-    setMessages([]);
-  }, []);
-
-  const deleteConversation = useCallback(async (id: string) => {
-    setConversations(prev => prev.filter(conv => conv.id !== id));
-    if (currentConversation?.id === id) {
-      const nextConversation = conversations.find(conv => conv.id !== id);
-      setCurrentConversation(nextConversation || null);
-      setMessages(nextConversation?.messages || []);
-    }
-  }, [conversations, currentConversation]);
+  }, [messages]);
 
   return (
-    <ChatContext.Provider value={{
-      messages,
-      conversations,
-      currentConversation,
-      isStreaming,
-      isSending,
-      sendMessage,
-      clearMessages,
-      createConversation,
-      deleteConversation,
-      setCurrentConversation,
-    }}>
+    <ChatContext.Provider value={{ messages, isStreaming, isSending, sendMessage }}>
       {children}
     </ChatContext.Provider>
   );

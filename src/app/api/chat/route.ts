@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { NextResponse } from 'next/server';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Load environment variables
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
@@ -12,27 +13,33 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? SUPAB
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
+interface ChatRequestBody {
+  messages: ChatCompletionMessageParam[];
+  conversationId: string;
+}
+
 // CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
 };
 
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
     // Log request details
     console.log('Processing chat request:', {
-      method: req.method,
-      headers: Object.fromEntries(req.headers.entries()),
+      method: request.method,
+      headers: Object.fromEntries(request.headers.entries()),
     });
 
     // Parse request body
-    const body = await req.json();
+    const body = await request.json() as ChatRequestBody;
     const { messages, conversationId } = body;
 
     if (!messages?.length || !conversationId) {
@@ -43,13 +50,70 @@ export async function POST(req: Request) {
       );
     }
 
-    // Create a new TransformStream for streaming
+    // Set up streaming
     const encoder = new TextEncoder();
-    const stream = new TransformStream();
-    const writer = stream.writable.getWriter();
+    const customReadable = new ReadableStream({
+      async start(controller) {
+        try {
+          // Save user message
+          const { error: messageError } = await supabase
+            .from('messages')
+            .insert({
+              content: messages[messages.length - 1].content,
+              role: 'user',
+              conversation_id: conversationId,
+            });
 
-    // Start the streaming response
-    const response = new NextResponse(stream.readable, {
+          if (messageError) {
+            console.error('Error saving user message:', messageError);
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Error saving message' })}\n\n`));
+            controller.close();
+            return;
+          }
+
+          // Start OpenAI streaming
+          const openaiStream = await openai.chat.completions.create({
+            model: 'gpt-3.5-turbo',
+            messages,
+            stream: true,
+          });
+
+          let fullResponse = '';
+
+          // Process the stream
+          for await (const chunk of openaiStream) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+              fullResponse += content;
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+            }
+          }
+
+          // Save assistant response
+          const { error: dbError } = await supabase
+            .from('messages')
+            .insert({
+              content: fullResponse,
+              role: 'assistant',
+              conversation_id: conversationId,
+            });
+
+          if (dbError) {
+            console.error('Error saving assistant message:', dbError);
+          }
+
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        } catch (error) {
+          console.error('Stream processing error:', error);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Stream error occurred' })}\n\n`));
+          controller.close();
+        }
+      },
+    });
+
+    // Return the stream response
+    return new Response(customReadable, {
       headers: {
         ...corsHeaders,
         'Content-Type': 'text/event-stream',
@@ -57,64 +121,8 @@ export async function POST(req: Request) {
         'Connection': 'keep-alive',
       },
     });
-
-    // Process in background
-    (async () => {
-      try {
-        // Save user message
-        const { error: messageError } = await supabase
-          .from('messages')
-          .insert({
-            content: messages[messages.length - 1].content,
-            role: 'user',
-            conversation_id: conversationId,
-          });
-
-        if (messageError) throw messageError;
-
-        // Start OpenAI streaming
-        const openaiStream = await openai.chat.completions.create({
-          model: 'gpt-3.5-turbo',
-          messages,
-          stream: true,
-        });
-
-        let fullResponse = '';
-
-        for await (const chunk of openaiStream) {
-          const content = chunk.choices[0]?.delta?.content || '';
-          if (content) {
-            fullResponse += content;
-            await writer.write(
-              encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
-            );
-          }
-        }
-
-        // Save assistant response
-        await supabase
-          .from('messages')
-          .insert({
-            content: fullResponse,
-            role: 'assistant',
-            conversation_id: conversationId,
-          });
-
-        await writer.write(encoder.encode('data: [DONE]\n\n'));
-      } catch (error) {
-        console.error('Streaming error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        await writer.write(
-          encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`)
-        );
-      } finally {
-        await writer.close();
-      }
-    })();
-
-    return response;
   } catch (error) {
-    console.error('API error:', error);
+    console.error('API Error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500, headers: corsHeaders }

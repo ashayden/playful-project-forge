@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type { Request, Response } from 'express';
 
 // Load environment variables
 const SUPABASE_URL = import.meta.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
@@ -25,38 +26,44 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
-export async function POST(request: Request) {
+export async function handleChatRequest(req: Request, res: Response) {
   try {
     // Log request details
     console.log('Processing chat request:', {
-      method: request.method,
-      headers: Object.fromEntries(request.headers.entries()),
+      method: req.method,
+      headers: req.headers,
     });
 
+    // Set CORS headers
+    Object.entries(corsHeaders).forEach(([key, value]) => {
+      res.setHeader(key, value);
+    });
+
+    // Handle OPTIONS request
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+
     // Check request method
-    if (request.method !== 'POST') {
-      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-        status: 405,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
     }
 
     // Parse request body
-    const body = await request.json() as ChatRequestBody;
-    const { messages, conversationId } = body;
+    const { messages, conversationId } = req.body as ChatRequestBody;
 
     if (!messages?.length || !conversationId) {
       console.log('Invalid request:', { hasMessages: !!messages?.length, hasConversationId: !!conversationId });
-      return new Response(JSON.stringify({ error: 'Messages and conversationId are required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      res.status(400).json({ error: 'Messages and conversationId are required' });
+      return;
     }
 
-    // Set up streaming response
-    const stream = new TransformStream();
-    const writer = stream.writable.getWriter();
-    const encoder = new TextEncoder();
+    // Set headers for streaming
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
 
     // Save user message
     const { error: messageError } = await supabase
@@ -69,11 +76,9 @@ export async function POST(request: Request) {
 
     if (messageError) {
       console.error('Error saving user message:', messageError);
-      await writer.write(encoder.encode(`data: ${JSON.stringify({ error: 'Error saving message' })}\n\n`));
-      await writer.close();
-      return new Response(stream.readable, {
-        headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' },
-      });
+      res.write(`data: ${JSON.stringify({ error: 'Error saving message' })}\n\n`);
+      res.end();
+      return;
     }
 
     // Start OpenAI streaming
@@ -86,53 +91,31 @@ export async function POST(request: Request) {
     let fullResponse = '';
 
     // Process the stream
-    (async () => {
-      try {
-        for await (const chunk of openaiStream) {
-          const content = chunk.choices[0]?.delta?.content || '';
-          if (content) {
-            fullResponse += content;
-            await writer.write(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
-          }
-        }
-
-        // Save assistant response
-        const { error: dbError } = await supabase
-          .from('messages')
-          .insert({
-            content: fullResponse,
-            role: 'assistant',
-            conversation_id: conversationId,
-          });
-
-        if (dbError) {
-          console.error('Error saving assistant message:', dbError);
-        }
-
-        await writer.write(encoder.encode('data: [DONE]\n\n'));
-        await writer.close();
-      } catch (error) {
-        console.error('Stream processing error:', error);
-        await writer.write(encoder.encode(`data: ${JSON.stringify({ error: 'Stream error occurred' })}\n\n`));
-        await writer.close();
+    for await (const chunk of openaiStream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        fullResponse += content;
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
       }
-    })();
+    }
 
-    return new Response(stream.readable, {
-      headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' },
-    });
+    // Save assistant response
+    const { error: dbError } = await supabase
+      .from('messages')
+      .insert({
+        content: fullResponse,
+        role: 'assistant',
+        conversation_id: conversationId,
+      });
+
+    if (dbError) {
+      console.error('Error saving assistant message:', dbError);
+    }
+
+    res.write('data: [DONE]\n\n');
+    res.end();
   } catch (error) {
     console.error('API Error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    res.status(500).json({ error: 'Internal server error' });
   }
-}
-
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: corsHeaders,
-  });
 } 

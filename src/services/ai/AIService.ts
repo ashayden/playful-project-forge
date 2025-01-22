@@ -1,54 +1,41 @@
-import { AI_CONFIG } from '@/config/ai.config';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
+export interface StreamCompletionOptions {
+  messages: ChatCompletionMessageParam[];
+  conversationId: string;
+}
+
 export class AIService {
-  static async streamCompletion(messages: ChatCompletionMessageParam[]) {
+  static async streamCompletion({ messages, conversationId }: StreamCompletionOptions): Promise<ReadableStream<Uint8Array>> {
     try {
-      const payload = {
-        messages,
-        conversationId: crypto.randomUUID(),
-      };
-      
-      console.log('Sending chat request with payload:', {
-        messageCount: messages.length,
-        lastMessage: messages[messages.length - 1],
-        conversationId: payload.conversationId,
-      });
+      // Log the request payload
+      console.log('Sending chat request:', { messages, conversationId });
 
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
         },
-        body: JSON.stringify(payload),
-      });
-
-      console.log('API Response:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
+        body: JSON.stringify({ messages, conversationId }),
       });
 
       if (!response.ok) {
-        const errorData = await response.text();
-        console.error('API Error Response:', {
+        console.error('API error:', {
           status: response.status,
           statusText: response.statusText,
-          data: errorData,
+          headers: Object.fromEntries(response.headers.entries()),
         });
-        throw new Error(`API error: ${response.status} - ${errorData}`);
+        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
       }
 
       if (!response.body) {
-        throw new Error('No response stream available');
+        throw new Error('No response body received');
       }
 
       return response.body;
     } catch (error) {
-      console.error('Error in AI service:', error);
+      console.error('Stream completion error:', error);
       throw error;
     }
   }
