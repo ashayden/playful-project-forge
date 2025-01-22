@@ -2,16 +2,29 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { NextRequest, NextResponse } from 'next/server';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { AI_CONFIG } from '@/config/ai.config';
 
-// Load environment variables
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? SUPABASE_ANON_KEY;
+// Load environment variables with validation
+const requiredEnvVars = {
+  SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+  SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY as string,
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY as string,
+};
+
+// Validate required environment variables
+Object.entries(requiredEnvVars).forEach(([key, value]) => {
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+});
 
 // Initialize clients
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+const supabase = createClient(
+  requiredEnvVars.SUPABASE_URL,
+  requiredEnvVars.SUPABASE_SERVICE_ROLE_KEY || requiredEnvVars.SUPABASE_ANON_KEY
+);
+const openai = new OpenAI({ apiKey: requiredEnvVars.OPENAI_API_KEY });
 
 interface ChatRequestBody {
   messages: ChatCompletionMessageParam[];
@@ -73,9 +86,8 @@ export async function POST(request: NextRequest) {
 
           // Start OpenAI streaming
           const openaiStream = await openai.chat.completions.create({
-            model: 'gpt-3.5-turbo',
+            ...AI_CONFIG,
             messages,
-            stream: true,
           });
 
           let fullResponse = '';

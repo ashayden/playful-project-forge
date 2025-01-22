@@ -47,12 +47,22 @@ cd playful-project-forge
 npm install
 ```
 
-3. Create a `.env.local` file with your environment variables:
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-OPENAI_API_KEY=your_openai_api_key
-```
+3. Set up environment variables:
+   - Copy `.env.example` to `.env.local`:
+     ```bash
+     cp .env.example .env.local
+     ```
+   - Fill in your environment variables in `.env.local`:
+     - **Supabase Configuration**
+       - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
+       - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
+       - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
+     - **OpenAI Configuration**
+       - `OPENAI_API_KEY`: Your OpenAI API key
+       - `VITE_OPENAI_MODEL`: OpenAI model to use (default: gpt-4o)
+       - `VITE_OPENAI_TEMPERATURE`: Model temperature (default: 0.7)
+       - `VITE_OPENAI_MAX_TOKENS`: Maximum tokens per response (default: 4096)
+       - Other optional OpenAI parameters can be configured as needed
 
 ### Development
 
