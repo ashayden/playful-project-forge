@@ -1,6 +1,6 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiRequest, NextApiResponse } from 'next'
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -14,16 +14,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Handle GET request
   if (req.method === 'GET') {
-    res.status(200).json({ message: 'Pages Router test endpoint working!' });
+    res.status(200).json({ message: 'GET working!' });
     return;
   }
 
   // Handle POST request
   if (req.method === 'POST') {
-    res.status(200).json({ 
-      message: 'Pages Router test endpoint working!',
-      receivedData: req.body 
-    });
+    try {
+      res.status(200).json({ 
+        message: 'POST working!',
+        received: req.body 
+      });
+    } catch (error) {
+      res.status(400).json({ error: 'Invalid request' });
+    }
     return;
   }
 
