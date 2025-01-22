@@ -6,14 +6,20 @@ export interface StreamCompletionOptions {
 }
 
 export class AIService {
-  private static API_URL = '/api/chat';
+  private static getApiUrl() {
+    // Use full URL in production, relative URL in development
+    return process.env.NODE_ENV === 'production'
+      ? 'https://playful-project-forge-j07u8s4ok-ashayden-gmailcoms-projects.vercel.app/api/chat'
+      : '/api/chat';
+  }
 
   static async streamCompletion({ messages, conversationId }: StreamCompletionOptions): Promise<ReadableStream<Uint8Array>> {
     try {
-      const response = await fetch(this.API_URL, {
+      const response = await fetch(this.getApiUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
         },
         body: JSON.stringify({ messages, conversationId }),
       });
