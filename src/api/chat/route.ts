@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import type { Request, Response } from 'express';
+import { NextRequest, NextResponse } from 'next/server';
 
 // Load environment variables
 const SUPABASE_URL = import.meta.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
@@ -26,96 +26,108 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
-export async function handleChatRequest(req: Request, res: Response) {
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
+export async function POST(request: NextRequest) {
   try {
     // Log request details
     console.log('Processing chat request:', {
-      method: req.method,
-      headers: req.headers,
+      method: request.method,
+      headers: request.headers,
     });
-
-    // Set CORS headers
-    Object.entries(corsHeaders).forEach(([key, value]) => {
-      res.setHeader(key, value);
-    });
-
-    // Handle OPTIONS request
-    if (req.method === 'OPTIONS') {
-      res.status(204).end();
-      return;
-    }
-
-    // Check request method
-    if (req.method !== 'POST') {
-      res.status(405).json({ error: 'Method not allowed' });
-      return;
-    }
 
     // Parse request body
-    const { messages, conversationId } = req.body as ChatRequestBody;
+    const body = await request.json() as ChatRequestBody;
+    const { messages, conversationId } = body;
 
     if (!messages?.length || !conversationId) {
       console.log('Invalid request:', { hasMessages: !!messages?.length, hasConversationId: !!conversationId });
-      res.status(400).json({ error: 'Messages and conversationId are required' });
-      return;
+      return NextResponse.json(
+        { error: 'Messages and conversationId are required' },
+        { status: 400, headers: corsHeaders }
+      );
     }
 
-    // Set headers for streaming
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    // Create a new stream
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // Save user message
+          const { error: messageError } = await supabase
+            .from('messages')
+            .insert({
+              content: messages[messages.length - 1].content,
+              role: 'user',
+              conversation_id: conversationId,
+            });
 
-    // Save user message
-    const { error: messageError } = await supabase
-      .from('messages')
-      .insert({
-        content: messages[messages.length - 1].content,
-        role: 'user',
-        conversation_id: conversationId,
-      });
+          if (messageError) {
+            console.error('Error saving user message:', messageError);
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: 'Error saving message' })}\n\n`));
+            controller.close();
+            return;
+          }
 
-    if (messageError) {
-      console.error('Error saving user message:', messageError);
-      res.write(`data: ${JSON.stringify({ error: 'Error saving message' })}\n\n`);
-      res.end();
-      return;
-    }
+          // Start OpenAI streaming
+          const openaiStream = await openai.chat.completions.create({
+            model: 'gpt-3.5-turbo',
+            messages,
+            stream: true,
+          });
 
-    // Start OpenAI streaming
-    const openaiStream = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages,
-      stream: true,
+          let fullResponse = '';
+
+          // Process the stream
+          for await (const chunk of openaiStream) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+              fullResponse += content;
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ content })}\n\n`));
+            }
+          }
+
+          // Save assistant response
+          const { error: dbError } = await supabase
+            .from('messages')
+            .insert({
+              content: fullResponse,
+              role: 'assistant',
+              conversation_id: conversationId,
+            });
+
+          if (dbError) {
+            console.error('Error saving assistant message:', dbError);
+          }
+
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
+        } catch (error) {
+          console.error('Stream Error:', error);
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: 'Stream error occurred' })}\n\n`));
+          controller.close();
+        }
+      },
     });
 
-    let fullResponse = '';
-
-    // Process the stream
-    for await (const chunk of openaiStream) {
-      const content = chunk.choices[0]?.delta?.content || '';
-      if (content) {
-        fullResponse += content;
-        res.write(`data: ${JSON.stringify({ content })}\n\n`);
-      }
-    }
-
-    // Save assistant response
-    const { error: dbError } = await supabase
-      .from('messages')
-      .insert({
-        content: fullResponse,
-        role: 'assistant',
-        conversation_id: conversationId,
-      });
-
-    if (dbError) {
-      console.error('Error saving assistant message:', dbError);
-    }
-
-    res.write('data: [DONE]\n\n');
-    res.end();
+    // Return the stream response
+    return new NextResponse(stream, {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   } catch (error) {
     console.error('API Error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500, headers: corsHeaders }
+    );
   }
 } 
