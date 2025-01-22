@@ -9,11 +9,11 @@ export class AIService {
   private static getApiUrls() {
     const baseUrl = process.env.NODE_ENV === 'production'
       ? 'https://playful-project-forge.vercel.app'
-      : '';
+      : 'http://localhost:3000';
     
     return {
       appRouter: `${baseUrl}/api/chat`,
-      pagesRouter: `${baseUrl}/api/chat.ts`,
+      pagesRouter: `${baseUrl}/api/pages-chat`,
     };
   }
 
@@ -23,6 +23,7 @@ export class AIService {
 
     // Try App Router endpoint first
     try {
+      console.log('Trying App Router endpoint:', urls.appRouter);
       const response = await fetch(urls.appRouter, {
         method: 'POST',
         headers: {
@@ -32,13 +33,18 @@ export class AIService {
         body: JSON.stringify({ messages, conversationId }),
       });
 
+      console.log('App Router response status:', response.status);
+      
       if (response.ok) {
         if (!response.body) {
           throw new Error('No response body received');
         }
         return response.body;
       }
-      lastError = new Error(`App Router API failed: ${response.status} ${response.statusText}`);
+      
+      const errorText = await response.text();
+      console.error('App Router error response:', errorText);
+      lastError = new Error(`App Router API failed: ${response.status} ${response.statusText} - ${errorText}`);
     } catch (error) {
       console.error('App Router attempt failed:', error);
       lastError = error as Error;
@@ -46,6 +52,7 @@ export class AIService {
 
     // Try Pages Router endpoint as fallback
     try {
+      console.log('Trying Pages Router endpoint:', urls.pagesRouter);
       const response = await fetch(urls.pagesRouter, {
         method: 'POST',
         headers: {
@@ -55,13 +62,18 @@ export class AIService {
         body: JSON.stringify({ messages, conversationId }),
       });
 
+      console.log('Pages Router response status:', response.status);
+
       if (response.ok) {
         if (!response.body) {
           throw new Error('No response body received');
         }
         return response.body;
       }
-      throw new Error(`Pages Router API failed: ${response.status} ${response.statusText}`);
+
+      const errorText = await response.text();
+      console.error('Pages Router error response:', errorText);
+      throw new Error(`Pages Router API failed: ${response.status} ${response.statusText} - ${errorText}`);
     } catch (error) {
       console.error('Pages Router attempt failed:', error);
       throw lastError || error;
