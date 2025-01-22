@@ -17,17 +17,27 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// CORS headers
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+// Response headers
+const responseHeaders = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0'
+};
+
+// Stream headers
+const streamHeaders = {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+  'Connection': 'keep-alive'
 };
 
 export async function OPTIONS() {
   return new Response(null, {
     status: 204,
-    headers: corsHeaders,
+    headers: responseHeaders,
   });
 }
 
@@ -47,7 +57,7 @@ export async function POST(request: NextRequest) {
       console.log('Invalid request: messages required');
       return new Response(JSON.stringify({ error: 'Messages are required' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: responseHeaders,
       });
     }
 
@@ -114,18 +124,13 @@ export async function POST(request: NextRequest) {
 
     // Return the stream response
     return new Response(stream, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
+      headers: streamHeaders,
     });
   } catch (error) {
     console.error('API Error:', error);
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: responseHeaders,
     });
   }
 } 
