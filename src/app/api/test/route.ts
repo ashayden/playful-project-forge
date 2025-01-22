@@ -15,18 +15,10 @@ export async function OPTIONS() {
 }
 
 export async function GET() {
-  return new Response(JSON.stringify({ message: 'App Router test endpoint working!' }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+  return Response.json({ message: 'GET working!' });
 }
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  
-  return new Response(JSON.stringify({ 
-    message: 'App Router test endpoint working!',
-    receivedData: body 
-  }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+  return Response.json({ message: 'POST working!', received: body });
 } 
