@@ -19,6 +19,12 @@ export class LoggingService {
     }
   }
 
+  info(message: string, ...args: any[]) {
+    if (this.isDevelopment) {
+      console.info(message, ...args);
+    }
+  }
+
   error(message: string, ...args: any[]) {
     if (this.isDevelopment) {
       console.error(message, ...args);
