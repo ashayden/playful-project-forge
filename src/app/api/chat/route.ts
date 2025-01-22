@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { AI_CONFIG } from '@/config/ai.config';
 
+export const runtime = 'edge';
+
 // Load environment variables with validation
 const requiredEnvVars = {
   SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL as string,
@@ -12,19 +14,15 @@ const requiredEnvVars = {
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY as string,
 };
 
-// Validate required environment variables
-Object.entries(requiredEnvVars).forEach(([key, value]) => {
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
-});
-
 // Initialize clients
 const supabase = createClient(
   requiredEnvVars.SUPABASE_URL,
   requiredEnvVars.SUPABASE_SERVICE_ROLE_KEY || requiredEnvVars.SUPABASE_ANON_KEY
 );
-const openai = new OpenAI({ apiKey: requiredEnvVars.OPENAI_API_KEY });
+const openai = new OpenAI({ 
+  apiKey: requiredEnvVars.OPENAI_API_KEY,
+  baseURL: process.env.OPENAI_API_BASE_URL,
+});
 
 interface ChatRequestBody {
   messages: ChatCompletionMessageParam[];
@@ -34,33 +32,59 @@ interface ChatRequestBody {
 // CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version',
+  'Access-Control-Allow-Credentials': 'true',
   'Access-Control-Max-Age': '86400',
 };
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(request: NextRequest) {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    // Log request details
-    console.log('Processing chat request:', {
-      method: request.method,
-      headers: Object.fromEntries(request.headers.entries()),
+  // Check method
+  if (request.method !== 'POST') {
+    return new Response(JSON.stringify({ error: `Method ${request.method} Not Allowed` }), {
+      status: 405,
+      headers: {
+        ...corsHeaders,
+        'Allow': 'POST, OPTIONS',
+        'Content-Type': 'application/json',
+      },
     });
+  }
+
+  try {
+    // Get user session
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    
+    if (authError || !session) {
+      console.error('Authentication error:', authError);
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+      });
+    }
 
     // Parse request body
     const body = await request.json() as ChatRequestBody;
     const { messages, conversationId } = body;
 
     if (!messages?.length || !conversationId) {
-      console.log('Invalid request:', { hasMessages: !!messages?.length, hasConversationId: !!conversationId });
-      return NextResponse.json(
-        { error: 'Messages and conversationId are required' },
-        { status: 400, headers: corsHeaders }
-      );
+      return new Response(JSON.stringify({ error: 'Messages and conversationId are required' }), {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+      });
     }
 
     // Set up streaming
@@ -75,6 +99,7 @@ export async function POST(request: NextRequest) {
               content: messages[messages.length - 1].content,
               role: 'user',
               conversation_id: conversationId,
+              user_id: session.user.id,
             });
 
           if (messageError) {
@@ -88,6 +113,7 @@ export async function POST(request: NextRequest) {
           const openaiStream = await openai.chat.completions.create({
             ...AI_CONFIG,
             messages,
+            stream: true,
           });
 
           let fullResponse = '';
@@ -108,6 +134,7 @@ export async function POST(request: NextRequest) {
               content: fullResponse,
               role: 'assistant',
               conversation_id: conversationId,
+              user_id: session.user.id,
             });
 
           if (dbError) {
@@ -118,7 +145,9 @@ export async function POST(request: NextRequest) {
           controller.close();
         } catch (error) {
           console.error('Stream processing error:', error);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Stream error occurred' })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+            error: error instanceof Error ? error.message : 'Stream error occurred'
+          })}\n\n`));
           controller.close();
         }
       },
@@ -135,9 +164,14 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('API Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500, headers: corsHeaders }
-    );
+    return new Response(JSON.stringify({ 
+      error: error instanceof Error ? error.message : 'Internal server error'
+    }), {
+      status: 500,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json',
+      },
+    });
   }
 } 

@@ -1,4 +1,5 @@
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { supabase } from '@/lib/supabase/client';
 
 export interface StreamCompletionOptions {
   messages: ChatCompletionMessageParam[];
@@ -16,7 +17,10 @@ export class AIService {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
         },
+        credentials: 'include',
         body: JSON.stringify({ messages, conversationId }),
       });
 
@@ -36,6 +40,26 @@ export class AIService {
       return response.body;
     } catch (error) {
       console.error('Stream completion error:', error);
+      throw error;
+    }
+  }
+
+  static async getConversationHistory(conversationId: string): Promise<ChatCompletionMessageParam[]> {
+    try {
+      const { data: messages, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      return messages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+    } catch (error) {
+      console.error('Error fetching conversation history:', error);
       throw error;
     }
   }
