@@ -1,12 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { Message } from '@/types/chat';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 
 interface ChatMessageProps {
-  message: Message;
+  message: ChatCompletionMessageParam;
   isLast?: boolean;
 }
 

@@ -11,7 +11,7 @@ interface ChatContextType {
   sendMessage: (content: string) => Promise<void>;
 }
 
-const ChatContext = createContext<ChatContextType | undefined>(undefined);
+export const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<ChatCompletionMessageParam[]>([]);

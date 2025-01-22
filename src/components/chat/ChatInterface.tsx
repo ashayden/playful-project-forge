@@ -5,12 +5,11 @@ import { useChat } from '@/hooks/useChat';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { TypingIndicator } from './TypingIndicator';
-import { Message } from '@/types/chat';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 export function ChatInterface() {
   const {
     messages,
-    currentConversation,
     isSending,
     isStreaming,
     sendMessage,
@@ -24,27 +23,25 @@ export function ChatInterface() {
     }
   }, [messages]);
 
-  if (!currentConversation) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">
-          Select or create a conversation to start chatting
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
-          {messages.map((message: Message, index: number) => (
-            <ChatMessage
-              key={message.id}
-              message={message}
-              isLast={index === messages.length - 1}
-            />
-          ))}
+          {messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-muted-foreground">
+                Send a message to start chatting
+              </p>
+            </div>
+          ) : (
+            messages.map((message: ChatCompletionMessageParam, index: number) => (
+              <ChatMessage
+                key={index}
+                message={message}
+                isLast={index === messages.length - 1}
+              />
+            ))
+          )}
           {isStreaming && (
             <TypingIndicator isTyping={true} className="ml-4" />
           )}

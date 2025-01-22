@@ -5,25 +5,18 @@ import { useChat } from '@/hooks/useChat';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sidebar } from '@/components/ui/sidebar';
-import { Plus, MessageSquare, Trash2 } from 'lucide-react';
-import { Conversation } from '@/types/chat';
+import { Plus, MessageSquare } from 'lucide-react';
 
 export function AppSidebar() {
-  const {
-    conversations,
-    currentConversation,
-    createConversation,
-    deleteConversation,
-    setCurrentConversation,
-  } = useChat();
+  const { messages, sendMessage } = useChat();
 
   return (
     <Sidebar className="border-r">
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between p-4">
-          <h2 className="text-lg font-semibold">Chats</h2>
+          <h2 className="text-lg font-semibold">Messages</h2>
           <Button
-            onClick={() => createConversation()}
+            onClick={() => sendMessage('Hello! How can you help me today?')}
             variant="ghost"
             size="icon"
             className="h-8 w-8"
@@ -33,26 +26,17 @@ export function AppSidebar() {
         </div>
         <ScrollArea className="flex-1">
           <div className="space-y-2 p-2">
-            {conversations.map((conversation: Conversation) => (
+            {messages.map((message, index) => (
               <div
-                key={conversation.id}
+                key={index}
                 className="flex items-center gap-2"
               >
                 <Button
-                  onClick={() => setCurrentConversation(conversation)}
-                  variant={currentConversation?.id === conversation.id ? 'secondary' : 'ghost'}
+                  variant="ghost"
                   className="w-full justify-start gap-2"
                 >
                   <MessageSquare className="h-4 w-4" />
-                  <span className="truncate">{conversation.title}</span>
-                </Button>
-                <Button
-                  onClick={() => deleteConversation(conversation.id)}
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 flex-shrink-0"
-                >
-                  <Trash2 className="h-4 w-4" />
+                  <span className="truncate">{message.role}: {typeof message.content === 'string' ? message.content.slice(0, 30) + '...' : 'Content'}</span>
                 </Button>
               </div>
             ))}
