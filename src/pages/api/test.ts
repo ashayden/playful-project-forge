@@ -1,6 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+// Enable bodyParser
+export const config = {
+  api: {
+    bodyParser: true,
+  },
+};
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -21,12 +28,25 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle POST request
   if (req.method === 'POST') {
     try {
+      // Log the raw body for debugging
+      console.log('Raw body:', req.body);
+      
+      // Ensure we have a body
+      if (!req.body) {
+        res.status(400).json({ error: 'No body provided' });
+        return;
+      }
+
       res.status(200).json({ 
         message: 'POST working!',
         received: req.body 
       });
-    } catch (error) {
-      res.status(400).json({ error: 'Invalid request' });
+    } catch (error: any) {
+      console.error('Error processing request:', error);
+      res.status(400).json({ 
+        error: 'Invalid request', 
+        details: error?.message || 'Unknown error' 
+      });
     }
     return;
   }
