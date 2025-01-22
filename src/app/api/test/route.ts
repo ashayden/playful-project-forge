@@ -1,5 +1,8 @@
 import { NextRequest } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 // CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,10 +18,21 @@ export async function OPTIONS() {
 }
 
 export async function GET() {
-  return Response.json({ message: 'GET working!' });
+  return new Response(JSON.stringify({ message: 'GET working!' }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  return Response.json({ message: 'POST working!', received: body });
+  try {
+    const body = await request.json();
+    return new Response(JSON.stringify({ message: 'POST working!', received: body }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 } 
