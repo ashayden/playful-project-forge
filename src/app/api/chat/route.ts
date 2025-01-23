@@ -3,8 +3,7 @@ import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import { AI_CONFIG } from '@/config/ai.config';
 
-// Remove edge runtime declaration
-// export const runtime = 'edge';
+export const runtime = 'edge';
 
 // Initialize OpenAI client
 const openai = new OpenAI({ 
@@ -17,69 +16,49 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Response headers
-const responseHeaders = {
-  'Content-Type': 'application/json',
-  'Cache-Control': 'no-store, no-cache, must-revalidate',
-  'Pragma': 'no-cache',
-  'Expires': '0'
-};
-
-// Stream headers
-const streamHeaders = {
+const headers = {
   'Content-Type': 'text/event-stream',
-  'Cache-Control': 'no-store, no-cache, must-revalidate',
-  'Pragma': 'no-cache',
-  'Expires': '0',
-  'Connection': 'keep-alive'
+  'Cache-Control': 'no-cache, no-transform',
+  'Connection': 'keep-alive',
 };
 
 export async function OPTIONS() {
   return new Response(null, {
     status: 204,
-    headers: responseHeaders,
+    headers,
   });
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Log request details
-    console.log('Processing chat request:', {
-      method: request.method,
-      headers: Object.fromEntries(request.headers.entries()),
-    });
-
-    // Parse request body
-    const body = await request.json();
-    const { messages, conversationId } = body;
+    const { messages, conversationId } = await request.json();
 
     if (!messages?.length) {
-      console.log('Invalid request: messages required');
-      return new Response(JSON.stringify({ error: 'Messages are required' }), {
-        status: 400,
-        headers: responseHeaders,
-      });
+      return new Response(
+        JSON.stringify({ error: 'Messages are required' }), 
+        { status: 400, headers }
+      );
     }
 
-    // Create a new stream
     const stream = new ReadableStream({
       async start(controller) {
+        const textEncoder = new TextEncoder();
+        const sendData = (data: any) => {
+          controller.enqueue(
+            textEncoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+          );
+        };
+
         try {
           // Save user message
-          const { error: messageError } = await supabase
+          await supabase
             .from('messages')
             .insert({
               content: messages[messages.length - 1].content,
               role: 'user',
               conversation_id: conversationId,
-            });
-
-          if (messageError) {
-            console.error('Error saving user message:', messageError);
-            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: 'Error saving message' })}\n\n`));
-            controller.close();
-            return;
-          }
+            })
+            .throwOnError();
 
           // Start OpenAI streaming
           const openaiStream = await openai.chat.completions.create({
@@ -90,47 +69,40 @@ export async function POST(request: NextRequest) {
 
           let fullResponse = '';
 
-          // Process the stream
           for await (const chunk of openaiStream) {
             const content = chunk.choices[0]?.delta?.content || '';
             if (content) {
               fullResponse += content;
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ content })}\n\n`));
+              sendData({ content });
             }
           }
 
           // Save assistant response
-          const { error: dbError } = await supabase
+          await supabase
             .from('messages')
             .insert({
               content: fullResponse,
               role: 'assistant',
               conversation_id: conversationId,
-            });
+            })
+            .throwOnError();
 
-          if (dbError) {
-            console.error('Error saving assistant message:', dbError);
-          }
-
-          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          sendData({ done: true });
           controller.close();
         } catch (error) {
           console.error('Stream Error:', error);
-          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: 'Stream error occurred' })}\n\n`));
+          sendData({ error: 'An error occurred' });
           controller.close();
         }
       },
     });
 
-    // Return the stream response
-    return new Response(stream, {
-      headers: streamHeaders,
-    });
+    return new Response(stream, { headers });
   } catch (error) {
     console.error('API Error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: responseHeaders,
-    });
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }), 
+      { status: 500, headers }
+    );
   }
 } 
