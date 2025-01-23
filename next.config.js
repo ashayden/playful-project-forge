@@ -1,10 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
-  distDir: 'dist',
-  trailingSlash: false,
-  images: {
-    unoptimized: true
+  typescript: {
+    ignoreBuildErrors: true // Temporarily ignore TS errors during build
   },
   async headers() {
     return [
@@ -22,12 +19,6 @@ const nextConfig = {
         ]
       }
     ]
-  },
-  typescript: {
-    ignoreBuildErrors: true // Temporarily ignore TS errors during build
-  },
-  experimental: {
-    serverComponentsExternalPackages: ['openai', '@supabase/supabase-js']
   }
 }
 

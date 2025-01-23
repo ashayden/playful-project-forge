@@ -3,11 +3,6 @@
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 
-export const metadata = {
-  title: 'Welcome | Chat App',
-  description: 'Get started with our modern chat application',
-};
-
 export default function Page() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-24">

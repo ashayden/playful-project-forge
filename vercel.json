@@ -1,10 +1,4 @@
 {
-  "version": 2,
-  "buildCommand": "next build",
-  "outputDirectory": "dist",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
-  ],
   "headers": [
     {
       "source": "/api/(.*)",
@@ -15,7 +9,5 @@
         { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version" }
       ]
     }
-  ],
-  "regions": ["iad1"],
-  "cleanUrls": true
+  ]
 } 
