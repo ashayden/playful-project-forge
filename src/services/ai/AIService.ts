@@ -7,8 +7,8 @@ export interface StreamCompletionOptions {
 
 export class AIService {
   private static getApiUrl() {
-    const baseUrl = process.env.NODE_ENV === 'production'
-      ? 'https://playful-project-forge.vercel.app'
+    const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL
+      ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
       : 'http://localhost:3000';
     
     return `${baseUrl}/api/chat`;

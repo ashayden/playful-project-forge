@@ -2,6 +2,9 @@
 const nextConfig = {
   output: 'standalone',
   distDir: 'dist',
+  basePath: '',
+  assetPrefix: '',
+  trailingSlash: false,
   async headers() {
     return [
       {
