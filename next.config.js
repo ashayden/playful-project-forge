@@ -19,7 +19,10 @@ const nextConfig = {
   },
   typescript: {
     ignoreBuildErrors: true // Temporarily ignore TS errors during build
+  },
+  experimental: {
+    serverComponentsExternalPackages: ['openai', '@supabase/supabase-js']
   }
 }
 
-module.exports = nextConfig 
+export default nextConfig 
