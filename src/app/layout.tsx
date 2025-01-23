@@ -1,14 +1,29 @@
-import * as React from "react";
-import "./globals.css";
+import { AuthProvider } from '@/contexts/auth-context';
+import { ChatProvider } from '@/contexts/ChatContext';
+import { ErrorBoundary } from '@/components/error-boundary/ErrorBoundary';
+import './globals.css';
 
-interface LayoutProps {
+export const metadata = {
+  title: 'Chat App',
+  description: 'A modern chat application',
+};
+
+export default function RootLayout({
+  children,
+}: {
   children: React.ReactNode;
-}
-
-export function Layout({ children }: LayoutProps) {
+}) {
   return (
-    <div className="min-h-screen bg-background font-sans antialiased">
-      {children}
-    </div>
+    <html lang="en">
+      <body>
+        <ErrorBoundary>
+          <AuthProvider>
+            <ChatProvider>
+              {children}
+            </ChatProvider>
+          </AuthProvider>
+        </ErrorBoundary>
+      </body>
+    </html>
   );
 } 
