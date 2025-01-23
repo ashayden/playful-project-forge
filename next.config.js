@@ -1,10 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  distDir: 'dist',
-  basePath: '',
-  assetPrefix: '',
-  trailingSlash: false,
+  distDir: '.next',
+  poweredByHeader: false,
+  reactStrictMode: true,
   async headers() {
     return [
       {
