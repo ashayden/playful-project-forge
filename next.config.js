@@ -1,9 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
-  distDir: '.next',
-  poweredByHeader: false,
-  reactStrictMode: true,
+  output: 'export',
+  distDir: 'dist',
+  trailingSlash: false,
+  images: {
+    unoptimized: true
+  },
   async headers() {
     return [
       {
